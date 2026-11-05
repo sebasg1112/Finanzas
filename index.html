@@ -655,6 +655,16 @@ function txRow(t){
 function monthBar(){ return `<div class="monthbar"><button class="circle-btn" data-act="prevm" type="button" aria-label="Mes anterior">${icon("chevron-left")}</button><h2>${monthName(selYm)}</h2><button class="circle-btn" data-act="nextm" type="button" aria-label="Mes siguiente">${icon("chevron-right")}</button></div>`; }
 function conic(parts, total){ let acc=0; const stops=parts.map(p=>{ const a=acc/total*360; acc+=p.v; const b=acc/total*360; return `${p.c} ${a}deg ${b}deg`; }); return `conic-gradient(${stops.join(",")||"var(--sunk) 0 360deg"})`; }
 
+// Tasa BCV automática: si la hoja no la trajo hoy, la app la busca sola (DolarApi publica la tasa oficial del BCV).
+let autoRateTried=false;
+async function autoRate(){ if(autoRateTried) return; autoRateTried=true;
+  const today=todayStr(); let changed=false;
+  const get = async u => { const r = await fetch(u, {cache:"no-store"}); if(!r.ok) throw new Error(r.status); return r.json(); };
+  try{ const d = await get("https://ve.dolarapi.com/v1/dolares/oficial"); const v = Math.round(parseFloat(d.promedio)*10000)/10000;
+    if(v>0 && Math.abs((rates[today]||0)-v) > 0.00005){ rates[today]=v; changed=true; } }catch(e){ console.warn("Tasa $ automática", e); }
+  try{ const d = await get("https://ve.dolarapi.com/v1/euros/oficial"); const v = Math.round(parseFloat(d.promedio)*10000)/10000;
+    if(v>0 && Math.abs((ratesEur[today]||0)-v) > 0.00005){ ratesEur[today]=v; changed=true; } }catch(e){ console.warn("Tasa € automática", e); }
+  if(changed){ render(); saveRates().catch(()=>{}); } }
 function latestKey(map){ const k=Object.keys(map).filter(x=>x<=todayStr()).sort(); return k.length?k[k.length-1]:null; }
 function ratesBar(){
   const kU=latestKey(rates), kE=latestKey(ratesEur), kT=latestKey(ratesUsdt); const today=todayStr();
@@ -1069,7 +1079,7 @@ function txForm(init){
       if(type==="gasto"||type==="ingreso"){
         if(!(amt>0)) return err("Escribe un monto mayor que cero.");
         rec.cat = t.cat; rec.amt = amt;
-        if(a.cur==="Bs"){ const r=parseAmt(val("fRate")); if(!(r>0)) return err("Falta la tasa BCV."); rec.rate=r; rec.usd=amt/r; if(!rates[date]){ rates[date]=r; saveRates().catch(()=>{}); } }
+        if(a.cur==="Bs"){ const r=parseAmt(val("fRate")); if(!(r>0)) return err("Falta la tasa BCV."); rec.rate=r; rec.usd=amt/r; if(!rates[date] && Math.abs(r-rateOn(date))>0.00005){ rates[date]=r; saveRates().catch(()=>{}); } }
         else rec.usd = amt;
       } else if(type==="cambio"){
         const to = acct(t.to); const toAmt = parseAmt(val("fToAmt"));
@@ -1523,7 +1533,7 @@ paintIcons();
     if(!s.exists){ cfgReady=false; return fail("Todavía no hay datos. En Apps Script ejecuta la función instalar."); }
     if(s.metadata.hasPendingWrites) return; cfg = JSON.parse(JSON.stringify(s.data())); cfgReady=true; render();
   }, onErr);
-  db.doc("rates/bcv").onSnapshot(s=>{ if(s.metadata.hasPendingWrites) return; const d=(s.exists && s.data())||{}; rates = Object.assign({}, d.bcv||{}); ratesEur = Object.assign({}, d.eur||{}); ratesUsdt = Object.assign({}, d.usdt||{}); ratesReady=true; render(); }, onErr);
+  db.doc("rates/bcv").onSnapshot(s=>{ if(s.metadata.hasPendingWrites) return; const d=(s.exists && s.data())||{}; rates = Object.assign({}, d.bcv||{}); ratesEur = Object.assign({}, d.eur||{}); ratesUsdt = Object.assign({}, d.usdt||{}); ratesReady=true; autoRate(); render(); }, onErr);
   db.collection("months").onSnapshot(s=>{ if(s.metadata.hasPendingWrites) return; const m={}; s.docs.forEach(d=>{ m[d.id] = ((d.data()||{}).items||[]).slice(); }); months=m; monthsReady=true; render(); }, onErr);
 })();
 })();
