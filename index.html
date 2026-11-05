@@ -655,6 +655,16 @@ function txRow(t){
 function monthBar(){ return `<div class="monthbar"><button class="circle-btn" data-act="prevm" type="button" aria-label="Mes anterior">${icon("chevron-left")}</button><h2>${monthName(selYm)}</h2><button class="circle-btn" data-act="nextm" type="button" aria-label="Mes siguiente">${icon("chevron-right")}</button></div>`; }
 function conic(parts, total){ let acc=0; const stops=parts.map(p=>{ const a=acc/total*360; acc+=p.v; const b=acc/total*360; return `${p.c} ${a}deg ${b}deg`; }); return `conic-gradient(${stops.join(",")||"var(--sunk) 0 360deg"})`; }
 
+// Tasa BCV automática: si la hoja no la trajo hoy, la app la busca sola (DolarApi publica la tasa oficial del BCV).
+let autoRateTried=false;
+async function autoRate(){ if(autoRateTried) return; autoRateTried=true;
+  const today=todayStr(); let changed=false;
+  const get = async u => { const r = await fetch(u, {cache:"no-store"}); if(!r.ok) throw new Error(r.status); return r.json(); };
+  try{ const d = await get("https://ve.dolarapi.com/v1/dolares/oficial"); const v = Math.round(parseFloat(d.promedio)*10000)/10000;
+    if(v>0 && Math.abs((rates[today]||0)-v) > 0.00005){ rates[today]=v; changed=true; } }catch(e){ console.warn("Tasa $ automática", e); }
+  try{ const d = await get("https://ve.dolarapi.com/v1/euros/oficial"); const v = Math.round(parseFloat(d.promedio)*10000)/10000;
+    if(v>0 && Math.abs((ratesEur[today]||0)-v) > 0.00005){ ratesEur[today]=v; changed=true; } }catch(e){ console.warn("Tasa € automática", e); }
+  if(changed){ render(); saveRates().catch(()=>{}); } }
 function latestKey(map){ const k=Object.keys(map).filter(x=>x<=todayStr()).sort(); return k.length?k[k.length-1]:null; }
 function ratesBar(){
   const kU=latestKey(rates), kE=latestKey(ratesEur), kT=latestKey(ratesUsdt); const today=todayStr();
@@ -788,6 +798,26 @@ function unlinkTx(t){ let dirty=unlinkAlloc(t);
   if(t.debtId && t.debtPaid){ const d=(cfg.deudas||[]).find(x=>x.id===t.debtId); if(d){ d.paid=Math.max(0,(d.paid||0)-t.debtPaid); dirty=true; } }
   return dirty; }
 const dropped = [];
+// Al marcar "la tarjeta quedó en cero": la diferencia entre lo pagado y lo que la app calculaba se anota como "Ajuste del banco".
+function settleAdjust(rec, exclude){ let catDirty=false;
+  const before = creditUsd({until:rec.date, exclude}).tdc || 0; const extra = rec.toAmt/rec.rate - before;
+  if(Math.abs(extra) <= 0.01) return false;
+  const pos = extra > 0; const it = {id:uid(), type: pos?"gasto":"ingreso", date:rec.date, acct:"tdc", cat:"Ajuste del banco", desc: pos?"Diferencia con lo que cobró el banco":"El banco cobró menos de lo que calculaba la app", amt:+(Math.abs(extra)*rec.rate).toFixed(2), rate:rec.rate, usd:Math.abs(extra), created:Date.now(), linkPago:rec.id};
+  const list = pos ? cfg.cats.gasto : cfg.cats.ingreso; if(list && !list.includes("Ajuste del banco")){ list.push("Ajuste del banco"); catDirty=true; }
+  const iym=ymOf(rec.date); months[iym]=[...(months[iym]||[]), it]; rec.interestId = it.id; if(!dropped.includes(iym)) dropped.push(iym); return catDirty; }
+// Corrección única (5 nov 2026): del 21 oct al 5 nov la tasa no se actualizó y quedó en 881,8769. Tasas oficiales BCV de esos días:
+const FIX_RATES_2026_11 = {"2026-10-21":883.3963,"2026-10-22":884.7496,"2026-10-23":886.2271,"2026-10-24":886.2271,"2026-10-25":886.2271,"2026-10-26":886.2271,"2026-10-27":887.302,"2026-10-28":888.1183,"2026-10-29":888.8909,"2026-10-30":889.2553,"2026-10-31":889.2553,"2026-11-01":889.2553,"2026-11-02":889.5754,"2026-11-03":891.1054,"2026-11-04":893.2173,"2026-11-05":894.8876};
+let migrating=false;
+function migrateRates(){ if(migrating || !cfgReady || !monthsReady || !ratesReady) return; cfg.migrations = cfg.migrations||{}; if(cfg.migrations.rates20261105) return; migrating=true;
+  const STALE=881.8769, touched=new Set();
+  for(const d in FIX_RATES_2026_11) rates[d]=FIX_RATES_2026_11[d];
+  for(const ym in months) for(const t of months[ym]||[]){ const nr=FIX_RATES_2026_11[t.date]; if(!nr || t.hist || t.linkPago) continue;
+    if(t.rate!=null && Math.abs(t.rate-STALE)<0.0001){ t.rate=nr; if(t.usd!=null && t.amt!=null && acct(t.acct) && acct(t.acct).cur==="Bs") t.usd=t.amt/nr; touched.add(ym); } }
+  for(const ym in months) for(const t of [...(months[ym]||[])]) if(t.type==="pago_tdc" && t.settle && FIX_RATES_2026_11[t.date]){ if(t.interestId) dropTx(t.interestId); delete t.interestId; settleAdjust(t, [t.id]); touched.add(ym); }
+  for(const y of dropped.splice(0)) touched.add(y);
+  cfg.migrations.rates20261105 = true;
+  const ps=[saveRates(), saveCfg(), ...[...touched].map(saveMonth)]; render();
+  guard(Promise.all(ps).finally(()=>{ migrating=false; }), touched.size?"Tasas corregidas del 21 oct al 5 nov":"Tasas corregidas"); }
 function dropTx(id){ for(const ym in months){ const n=(months[ym]||[]).length; months[ym]=(months[ym]||[]).filter(x=>x.id!==id); if(months[ym].length!==n && !dropped.includes(ym)) dropped.push(ym); } }
 function addTx(rec){ const ym=ymOf(rec.date); months[ym]=[...(months[ym]||[]), rec]; return saveMonth(ym); }
 const PERSON_COLORS = [1,2,3,5,6,7,8,4];
@@ -1069,7 +1099,7 @@ function txForm(init){
       if(type==="gasto"||type==="ingreso"){
         if(!(amt>0)) return err("Escribe un monto mayor que cero.");
         rec.cat = t.cat; rec.amt = amt;
-        if(a.cur==="Bs"){ const r=parseAmt(val("fRate")); if(!(r>0)) return err("Falta la tasa BCV."); rec.rate=r; rec.usd=amt/r; if(!rates[date]){ rates[date]=r; saveRates().catch(()=>{}); } }
+        if(a.cur==="Bs"){ const r=parseAmt(val("fRate")); if(!(r>0)) return err("Falta la tasa BCV."); rec.rate=r; rec.usd=amt/r; if(!rates[date] && Math.abs(r-rateOn(date))>0.00005){ rates[date]=r; saveRates().catch(()=>{}); } }
         else rec.usd = amt;
       } else if(type==="cambio"){
         const to = acct(t.to); const toAmt = parseAmt(val("fToAmt"));
@@ -1081,12 +1111,7 @@ function txForm(init){
         if(a.cur==="Bs") amt = toAmt; else if(!(amt>0)) return err(`Escribe cuántos ${curSym(a.cur)} te costó el pago.`);
         Object.assign(rec,{amt, to:"tdc", toAmt, cat:"Pago tarjeta", rate: rateOn(date)}); rec.usd = toUsd(amt, a.cur, date);
         if(t.interestId) dropTx(t.interestId);
-        if(g("fSettle") && g("fSettle").checked){ rec.settle = true;
-          const before = creditUsd({until:date, exclude:[t.id||"", t.interestId||""]}).tdc || 0;
-          const extra = toAmt/rec.rate - before;
-          if(extra > 0.01){ const it = {id:uid(), type:"gasto", date, acct:"tdc", cat:"Ajuste del banco", desc:"Diferencia con lo que cobró el banco", amt:+(extra*rec.rate).toFixed(2), rate:rec.rate, usd:extra, created:Date.now(), linkPago:rec.id};
-            if(!cfg.cats.gasto.includes("Ajuste del banco")){ cfg.cats.gasto.push("Ajuste del banco"); var catDirty=true; }
-            const iym=ymOf(date); months[iym]=[...(months[iym]||[]), it]; rec.interestId = it.id; } }
+        if(g("fSettle") && g("fSettle").checked){ rec.settle = true; if(settleAdjust(rec, [t.id||"", t.interestId||""])) var catDirty=true; }
       } else {
         const al = (readAlloc()||[]).filter(x=>(x.usdt||0)>0 || (x.qty||0)>0);
         if(!(amt>0) && al.length) amt = al.reduce((s,x)=>s+(x.usdt||0),0);
@@ -1521,10 +1546,10 @@ paintIcons();
   const onErr = () => { if(!document.getElementById("setup")) fail(`No se pudo conectar con tu hoja de Google. Revisa tu internet y recarga. <button class="btn sm ghost" type="button" onclick="window.__finSetup()">Cambiar conexión</button>`); };
   db.doc("config/main").onSnapshot(s=>{
     if(!s.exists){ cfgReady=false; return fail("Todavía no hay datos. En Apps Script ejecuta la función instalar."); }
-    if(s.metadata.hasPendingWrites) return; cfg = JSON.parse(JSON.stringify(s.data())); cfgReady=true; render();
+    if(s.metadata.hasPendingWrites) return; cfg = JSON.parse(JSON.stringify(s.data())); cfgReady=true; render(); migrateRates();
   }, onErr);
-  db.doc("rates/bcv").onSnapshot(s=>{ if(s.metadata.hasPendingWrites) return; const d=(s.exists && s.data())||{}; rates = Object.assign({}, d.bcv||{}); ratesEur = Object.assign({}, d.eur||{}); ratesUsdt = Object.assign({}, d.usdt||{}); ratesReady=true; render(); }, onErr);
-  db.collection("months").onSnapshot(s=>{ if(s.metadata.hasPendingWrites) return; const m={}; s.docs.forEach(d=>{ m[d.id] = ((d.data()||{}).items||[]).slice(); }); months=m; monthsReady=true; render(); }, onErr);
+  db.doc("rates/bcv").onSnapshot(s=>{ if(s.metadata.hasPendingWrites) return; const d=(s.exists && s.data())||{}; rates = Object.assign({}, d.bcv||{}); ratesEur = Object.assign({}, d.eur||{}); ratesUsdt = Object.assign({}, d.usdt||{}); ratesReady=true; autoRate(); migrateRates(); render(); }, onErr);
+  db.collection("months").onSnapshot(s=>{ if(s.metadata.hasPendingWrites) return; const m={}; s.docs.forEach(d=>{ m[d.id] = ((d.data()||{}).items||[]).slice(); }); months=m; monthsReady=true; render(); migrateRates(); }, onErr);
 })();
 })();
 </script>
