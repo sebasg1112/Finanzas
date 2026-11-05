@@ -451,7 +451,7 @@ const CAT = {
   "Estacionamiento":["square-parking",3],"Mantenimiento carro":["wrench",3],"Salud y farmacia":["pill",6],"Ocio":["ticket",5],
   "Deporte y fútbol":["trophy",8],"Suscripciones":["repeat",7],"Regalos":["gift",6],"Personal":["shirt",5],"Hogar":["sofa",4],
   "Viajes":["plane",7],"Préstamos":["hand-coins",4],"Otros":["ellipsis",0],"Magnum City Club":["dumbbell",8],"Condominio":["building-2",3],
-  "NetUno":["wifi",7],"Movistar":["smartphone",7],"Seguro Mercantil":["shield-check",1],"Intereses y comisiones TDC":["percent",0],
+  "NetUno":["wifi",7],"Movistar":["smartphone",7],"Seguro Mercantil":["shield-check",1],"Intereses y comisiones TDC":["percent",0],"Ajuste del banco":["scale",0],
   "Sueldo":["briefcase",1],"Bono":["sparkles",4],"Reembolso":["undo-2",7],"Préstamo devuelto":["hand-coins",1],"Otros ingresos":["circle-plus",1],
 };
 const catIcon = c => (CAT[c]||["circle",0])[0];
@@ -539,7 +539,7 @@ function tdcInfo(){
   if(corte){ for(const p of pagos) if(p.date>corte.fecha){ pagado += p.toAmt||0; pagadoUsd += (p.toAmt||0)/(p.rate||rateOn(p.date)); } for(const c of comprasList) compras += c.amt; }
   const saldoUsd = corte ? (corte.saldoUsd!=null ? corte.saldoUsd : (corte.saldo||0)/(rateOn(corte.fecha)||rate)) : 0;
   const pendienteCorte = corte ? Math.max(0, saldoUsd - pagadoUsd) * rate : 0;
-  const intereses = txs.filter(t=>t.type==="gasto"&&t.acct==="tdc"&&t.cat==="Intereses tarjeta").reduce((s,t)=>s+(t.usd||0),0);
+  const intereses = txs.filter(t=>t.type==="gasto"&&t.acct==="tdc"&&t.cat==="Ajuste del banco").reduce((s,t)=>s+(t.usd||0),0);
   return {debt, debtUsd, rate, limitBs, disponible: limitBs-debt, corte, pagado, compras, comprasList, pagos, pendienteCorte, intereses};
 }
 function fixedStatus(f){
@@ -1000,7 +1000,7 @@ function txForm(init){
         <div class="btns"><button class="btn sm ghost" type="button" data-fill="${ti.pendienteCorte.toFixed(2)}">Saldo del corte</button><button class="btn sm ghost" type="button" data-fill="${ti.debt.toFixed(2)}">Toda la deuda</button>${ti.corte&&ti.corte.minimo?`<button class="btn sm ghost" type="button" data-fill="${(+ti.corte.minimo).toFixed(2)}">Mínimo</button>`:""}</div>
         <div class="field"><span class="flabel">Pagado desde</span>${accPicker("acct", t.acct, cashAccts())}</div>
         <div id="usedBox">${amtBox("fAmt", t.amt, "¿Cuánto te costó?")}</div>
-        <label class="field" style="display:flex;gap:10px;align-items:flex-start;flex-direction:row;cursor:pointer"><input type="checkbox" id="fSettle" ${t.settle?"checked":""} style="width:22px;height:22px;flex:0 0 22px;margin-top:2px"><span><b>Con este pago la tarjeta quedó en cero</b><br><span class="small muted">Si el banco cobró más de lo que la app calculaba, la diferencia se anota sola como gasto "Intereses tarjeta".</span></span></label>`;
+        <label class="field" style="display:flex;gap:10px;align-items:flex-start;flex-direction:row;cursor:pointer"><input type="checkbox" id="fSettle" ${t.settle?"checked":""} style="width:22px;height:22px;flex:0 0 22px;margin-top:2px"><span><b>Con este pago la tarjeta quedó en cero</b><br><span class="small muted">Si el banco cobró más de lo que la app calculaba, la diferencia se anota sola como gasto "Ajuste del banco".</span></span></label>`;
     } else {
       const invSel = cfg.investments.find(i=>i.id===t.inv);
       let coins = "";
@@ -1084,8 +1084,8 @@ function txForm(init){
         if(g("fSettle") && g("fSettle").checked){ rec.settle = true;
           const before = creditUsd({until:date, exclude:[t.id||"", t.interestId||""]}).tdc || 0;
           const extra = toAmt/rec.rate - before;
-          if(extra > 0.01){ const it = {id:uid(), type:"gasto", date, acct:"tdc", cat:"Intereses tarjeta", desc:"Intereses y cargos del banco", amt:+(extra*rec.rate).toFixed(2), rate:rec.rate, usd:extra, created:Date.now(), linkPago:rec.id};
-            if(!cfg.cats.gasto.includes("Intereses tarjeta")){ cfg.cats.gasto.push("Intereses tarjeta"); var catDirty=true; }
+          if(extra > 0.01){ const it = {id:uid(), type:"gasto", date, acct:"tdc", cat:"Ajuste del banco", desc:"Diferencia con lo que cobró el banco", amt:+(extra*rec.rate).toFixed(2), rate:rec.rate, usd:extra, created:Date.now(), linkPago:rec.id};
+            if(!cfg.cats.gasto.includes("Ajuste del banco")){ cfg.cats.gasto.push("Ajuste del banco"); var catDirty=true; }
             const iym=ymOf(date); months[iym]=[...(months[iym]||[]), it]; rec.interestId = it.id; } }
       } else {
         const al = (readAlloc()||[]).filter(x=>(x.usdt||0)>0 || (x.qty||0)>0);
