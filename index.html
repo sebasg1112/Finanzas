@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#EEF3F5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#06120F" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -288,6 +288,7 @@ input.amtin[readonly]{background:var(--sunk)}
 .field{display:grid;gap:6px}
 .field>label,.flabel{font-size:.78rem;font-weight:600;color:var(--muted)}
 .field input,.field select{font:inherit;color:var(--fg);background:var(--solid);border:1px solid var(--line);border-radius:11px;padding:10px 12px;width:100%;min-width:0}
+.field input,.field select,.search input,input.plain,.brow input,textarea{font-size:16px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:420px){.grid2{grid-template-columns:1fr}}
 .hint{font-size:.85rem;color:var(--fg);background:var(--accent-soft);border-radius:12px;padding:10px 12px}
@@ -495,32 +496,51 @@ const toUsd = (amount, cur, date) => cur==="Bs" ? amount / (rateOn(date)||1) : a
 const nowUsd = (amount, cur) => cur==="Bs" ? amount / (todayRate()||1) : amount;
 const curSym = c => c==="Bs" ? "Bs" : c==="USDT" ? "USDT" : "$";
 
+// La tarjeta está indexada al dólar BCV: la deuda se lleva en $ y se muestra en Bs a la tasa de hoy.
+const TDC_OPEN_DATE = () => (cfg.tdc && cfg.tdc.openingDate) || "2026-10-19";
+function creditUsd(opts){ const o=opts||{}; const out={};
+  for(const a of cfg.accounts) if(a.credit) out[a.id] = (a.opening||0) / (rateOn(TDC_OPEN_DATE())||todayRate());
+  const mv = (id, cash, t, rate) => { if(out[id]==null) return; out[id] -= cash / (rate || t.rate || rateOn(t.date) || todayRate()); };
+  for(const t of allTx()){
+    if(t.hist) continue; if(o.until && t.date>o.until) continue; if(o.exclude && o.exclude.includes(t.id)) continue;
+    if(t.type==="gasto"){ if(out[t.acct]!=null) out[t.acct] += (t.usd!=null ? t.usd : t.amt/(t.rate||rateOn(t.date))); }
+    else if(t.type==="ingreso") mv(t.acct, t.amt, t);
+    else if(t.type==="cambio"){ mv(t.acct, -t.amt, t); mv(t.to, t.toAmt||0, t); }
+    else if(t.type==="pago_tdc") mv(t.to||"tdc", t.toAmt||0, t);
+    else if(t.type==="adelanto") mv(t.acct, -t.amt, t);
+    else if(t.type==="cobro") mv(t.acct, t.amt, t);
+  }
+  return out; }
 function balances(){
   const bal = {}; for(const a of cfg.accounts) bal[a.id] = a.opening || 0;
-  const move = (id, cash) => { const a=acct(id); bal[id] = (bal[id]||0) + (a.credit ? -cash : cash); };
+  const move = (id, cash) => { const a=acct(id); if(a.credit) return; bal[id] = (bal[id]||0) + cash; };
   for(const t of allTx()){
     if(t.hist) continue;
     if(t.type==="gasto") move(t.acct, -t.amt);
     else if(t.type==="ingreso") move(t.acct, t.amt);
     else if(t.type==="inversion") move(t.acct, -t.amt);
     else if(t.type==="cambio"){ move(t.acct, -t.amt); move(t.to, t.toAmt||0); }
-    else if(t.type==="pago_tdc"){ move(t.acct, -t.amt); move(t.to||"tdc", t.toAmt||0); }
+    else if(t.type==="pago_tdc"){ move(t.acct, -t.amt); }
     else if(t.type==="adelanto") move(t.acct, -t.amt);
     else if(t.type==="cobro") move(t.acct, t.amt);
   }
+  const cu = creditUsd(); for(const id in cu) bal[id] = cu[id] * todayRate();
   return bal;
 }
 function tdcInfo(){
-  const bal = balances(); const debt = bal.tdc || 0; const rate = todayRate();
+  const debtUsd = creditUsd().tdc || 0; const rate = todayRate(); const debt = debtUsd * rate;
   const limitBs = cfg.tdc.limitUSD * rate;
   const cortes = [...(cfg.tdc.cortes||[])].sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const corte = cortes[cortes.length-1] || null; const txs = allTx();
   let pagado=0, compras=0;
   const pagos = txs.filter(t=>t.type==="pago_tdc").sort((a,b)=>b.date.localeCompare(a.date));
   const comprasList = corte ? txs.filter(t=>t.type==="gasto" && t.acct==="tdc" && t.date>corte.fecha).sort((a,b)=>b.date.localeCompare(a.date)) : [];
-  if(corte){ for(const p of pagos) if(p.date>corte.fecha) pagado += p.toAmt||0; for(const c of comprasList) compras += c.amt; }
-  const pendienteCorte = corte ? Math.max(0, (corte.saldo||0) - pagado) : 0;
-  return {debt, rate, limitBs, disponible: limitBs-debt, corte, pagado, compras, comprasList, pagos, pendienteCorte};
+  let pagadoUsd=0;
+  if(corte){ for(const p of pagos) if(p.date>corte.fecha){ pagado += p.toAmt||0; pagadoUsd += (p.toAmt||0)/(p.rate||rateOn(p.date)); } for(const c of comprasList) compras += c.amt; }
+  const saldoUsd = corte ? (corte.saldoUsd!=null ? corte.saldoUsd : (corte.saldo||0)/(rateOn(corte.fecha)||rate)) : 0;
+  const pendienteCorte = corte ? Math.max(0, saldoUsd - pagadoUsd) * rate : 0;
+  const intereses = txs.filter(t=>t.type==="gasto"&&t.acct==="tdc"&&t.cat==="Intereses tarjeta").reduce((s,t)=>s+(t.usd||0),0);
+  return {debt, debtUsd, rate, limitBs, disponible: limitBs-debt, corte, pagado, compras, comprasList, pagos, pendienteCorte, intereses};
 }
 function fixedStatus(f){
   const today = todayStr();
@@ -624,7 +644,7 @@ function txRow(t){
   let main, second="";
   if(t.type==="cambio"){ const to=acct(t.to); sub=`${a.name} → ${to.name}`; main=`${fmt(t.amt)} ${curSym(a.cur)}`; second=`${fmt0(t.toAmt)} ${curSym(to.cur)}`; }
   else if(t.type==="pago_tdc"){ sub=`Pago tarjeta · desde ${a.name}`; main=t.toAmt?`${fmt0(t.toAmt)} Bs`:`${fmt(t.amt)} ${curSym(a.cur)}`; second=t.toAmt&&a.cur!=="Bs"?`${fmt(t.amt)} ${curSym(a.cur)}`:""; }
-  else if(t.type==="inversion"){ sub=`Inversión · ${a.name}`; main=`−${fmt(t.amt)} ${curSym(a.cur)}`; }
+  else if(t.type==="inversion"){ { const iv=cfg.investments.find(i=>i.id===t.inv); sub = iv&&iv.kind==="cripto"&&!t.hist&&!(t.alloc&&t.alloc.length) ? "Falta elegir monedas · toca aquí" : `${iv?iv.name:"Inversión"} · ${a.name}${t.alloc&&t.alloc.length?" · "+t.alloc.map(x=>x.sym).join(", "):""}`; } main=`−${fmt(t.amt)} ${curSym(a.cur)}`; }
   else if(t.type==="adelanto"){ sub=`Pagaste por otros · ${a.name}`; main=`−${fmt(t.amt)} ${curSym(a.cur)}`; }
   else if(t.type==="cobro"){ sub=`Te devolvieron · ${a.name}`; main=`+${fmt(t.amt)} ${curSym(a.cur)}`; }
   else { const sign=t.type==="ingreso"?"+":"−"; main = a.cur==="Bs" ? `${sign}${usd(t.usd||0)}` : `${sign}${fmt(t.amt)} ${curSym(a.cur)}`; if(a.cur==="Bs") second=`${fmt0(t.amt)} Bs`; }
@@ -719,7 +739,7 @@ function viewTdc(){
   return `
   <section class="cc">
     <div class="cc-top"><span class="label">Banco Plaza</span><span class="cc-chip"></span></div>
-    <div><div class="label">Debes</div><div class="big">${fmt(t.debt)} Bs</div><div style="opacity:.8">≈ ${usd(t.debt/t.rate)}</div></div>
+    <div><div class="label">${t.debt<-0.5?"Saldo a tu favor":"Debes"}</div><div class="big">${fmt(Math.abs(t.debt))} Bs</div><div style="opacity:.8">≈ ${usd(Math.abs(t.debtUsd))} · indexado a la tasa BCV</div></div>
     <div style="display:grid;gap:6px"><div class="bar"><i style="width:${Math.min(100,util*100)}%"></i></div>
     <div style="display:flex;justify-content:space-between;gap:8px;font-size:.82rem;opacity:.9;flex-wrap:wrap"><span>Disponible ${fmt0(t.disponible)} Bs</span><span>Límite ${usd0(cfg.tdc.limitUSD)}</span></div></div>
   </section>
@@ -759,10 +779,16 @@ const debtLeft = d => Math.max(0, d.amt-(d.paid||0));
 const openDebts = () => (cfg.deudas||[]).filter(d=>debtLeft(d)>0.005);
 function obligations(){ const cuotas=(cfg.cuotas||[]).reduce((s,p)=>s+conv(planInfo(p).left,p.cur,"USD"),0);
   let debo=0, meDeben=0; for(const d of openDebts()){ const v=conv(debtLeft(d),d.cur,"USD"); if(d.dir==="debo") debo+=v; else meDeben+=v; } return {cuotas, debo, meDeben}; }
-function unlinkTx(t){ let dirty=false;
+function applyAlloc(inv, al){ const today=todayStr(); for(const x of al){ let h=(inv.holdings||[]).find(y=>y.sym===x.sym); if(!h){ h={sym:x.sym, qty:0}; (inv.holdings=inv.holdings||[]).push(h); } const q=earnQty(h)||0; h.qty=+(q+(x.qty||0)).toFixed(10); h.since=today; } }
+function unlinkAlloc(t){ if(!t.alloc || !t.alloc.length) return false; const inv=cfg.investments.find(i=>i.id===t.inv); if(!inv) return false; const today=todayStr();
+  for(const x of t.alloc){ const h=(inv.holdings||[]).find(y=>y.sym===x.sym); if(!h) continue; const q=earnQty(h)||0; h.qty=Math.max(0, +(q-(x.qty||0)).toFixed(10)); h.since=today; }
+  if(t.costAdded && inv.cost!=null) inv.cost = Math.max(0, +(inv.cost - t.costAdded).toFixed(2)); return true; }
+function unlinkTx(t){ let dirty=unlinkAlloc(t);
   if(t.cuotaRef){ const pl=(cfg.cuotas||[]).find(x=>x.id===t.cuotaRef.plan); const c=pl&&pl.schedule[t.cuotaRef.idx]; if(c && c.txId===t.id){ c.paid=false; delete c.paidDate; delete c.txId; dirty=true; } }
   if(t.debtId && t.debtPaid){ const d=(cfg.deudas||[]).find(x=>x.id===t.debtId); if(d){ d.paid=Math.max(0,(d.paid||0)-t.debtPaid); dirty=true; } }
   return dirty; }
+const dropped = [];
+function dropTx(id){ for(const ym in months){ const n=(months[ym]||[]).length; months[ym]=(months[ym]||[]).filter(x=>x.id!==id); if(months[ym].length!==n && !dropped.includes(ym)) dropped.push(ym); } }
 function addTx(rec){ const ym=ymOf(rec.date); months[ym]=[...(months[ym]||[]), rec]; return saveMonth(ym); }
 const PERSON_COLORS = [1,2,3,5,6,7,8,4];
 const personColor = name => { let h=0; for(const ch of String(name)) h=(h*31+ch.charCodeAt(0))>>>0; return `var(--c${PERSON_COLORS[h%PERSON_COLORS.length]})`; };
@@ -902,7 +928,9 @@ function viewInv(){
     <div style="opacity:.85">Aportaste ${h(usd(base))} · ${total>=base?"ganancia":"pérdida"} ${h(usd(Math.abs(total-base)))}</div>
   </section>
   <div class="hint plain">${icon("lock")}<span>Este dinero no aparece en Inicio ni en tu disponible. Para meter plata aquí usa <b>+ → Invertir</b>.</span></div>
-  <section>${rows}</section>`;
+  <section>${rows}</section>
+  ${(()=>{ const ap=allTx().filter(t=>t.type==="inversion").sort((a,b)=>b.date.localeCompare(a.date)||(b.created||0)-(a.created||0)).slice(0,8); if(!ap.length) return "";
+    return `<section><div class="sechead"><h2>Últimos aportes</h2></div><div class="card">${ap.map(txRow).join("")}</div></section>`; })()}`;
 }
 
 function render(){
@@ -946,6 +974,7 @@ const sheetHead = title => `<div class="sechead"><h2 style="font-size:1.25rem">$
 function txForm(init){
   const t = Object.assign({type:"gasto", date:todayStr(), acct:"binance", cat:"Mercado", desc:"", amt:"", to:"mercantil", toAmt:"", inv:"cripto"}, init||{});
   const editing = !!t.id; let type = t.type;
+  if(t.alloc){ t.alloc0 = t.alloc; t.costAdded0 = t.costAdded; }
   const accPicker = (key, sel, list) => `<div class="acctpick" data-pick="${key}">${list.map(a=>`<button type="button" data-v="${a.id}" aria-pressed="${a.id===sel}">${ico(ACC_ICON[a.id]||"wallet",accColor(a.id))}${esc(a.credit?"Tarjeta crédito":a.name)}</button>`).join("")}</div>`;
   const amtBox = (id, val, lbl) => `<div class="field"><span class="flabel">${lbl}</span><label class="amtbox"><input id="${id}" inputmode="decimal" value="${esc(typeof val==="number"?inStr(val):(val??""))}" placeholder="0,00" aria-label="${esc(lbl)}"><span id="${id}Cur"></span></label></div>`;
   const draw = () => {
@@ -966,14 +995,22 @@ function txForm(init){
         <div class="field"><span class="flabel">Llega a</span>${accPicker("to", t.to, cashAccts())}</div>${amtBox("fToAmt", t.toAmt, "Monto que llega")}`;
     } else if(type==="pago_tdc"){
       const ti = tdcInfo();
-      body = `<div class="hint">Debes <b>${fmt(ti.debt)} Bs</b> · del corte faltan <b>${fmt(ti.pendienteCorte)} Bs</b></div>
+      body = `<div class="hint">Debes <b>${fmt(ti.debt)} Bs</b> (≈ ${usd(ti.debtUsd)} a tasa BCV de hoy) · del corte faltan <b>${fmt(ti.pendienteCorte)} Bs</b>. La deuda está en $: si la tasa sube, sube en Bs.</div>
         ${amtBox("fToAmt", t.toAmt, "¿Cuántos Bs abonaste a la tarjeta?")}
         <div class="btns"><button class="btn sm ghost" type="button" data-fill="${ti.pendienteCorte.toFixed(2)}">Saldo del corte</button><button class="btn sm ghost" type="button" data-fill="${ti.debt.toFixed(2)}">Toda la deuda</button>${ti.corte&&ti.corte.minimo?`<button class="btn sm ghost" type="button" data-fill="${(+ti.corte.minimo).toFixed(2)}">Mínimo</button>`:""}</div>
         <div class="field"><span class="flabel">Pagado desde</span>${accPicker("acct", t.acct, cashAccts())}</div>
-        <div id="usedBox">${amtBox("fAmt", t.amt, "¿Cuánto te costó?")}</div>`;
+        <div id="usedBox">${amtBox("fAmt", t.amt, "¿Cuánto te costó?")}</div>
+        <label class="field" style="display:flex;gap:10px;align-items:flex-start;flex-direction:row;cursor:pointer"><input type="checkbox" id="fSettle" ${t.settle?"checked":""} style="width:22px;height:22px;flex:0 0 22px;margin-top:2px"><span><b>Con este pago la tarjeta quedó en cero</b><br><span class="small muted">Si el banco cobró más de lo que la app calculaba, la diferencia se anota sola como gasto "Intereses tarjeta".</span></span></label>`;
     } else {
-      body = `${amtBox("fAmt", t.amt, "¿Cuánto inviertes?")}<div class="field"><span class="flabel">Sale de</span>${accPicker("acct", t.acct, cashAccts())}</div>
-        <div class="field"><label for="fInv">Va a</label><select id="fInv">${cfg.investments.map(i=>opt(i.id,i.name,t.inv)).join("")}</select></div>`;
+      const invSel = cfg.investments.find(i=>i.id===t.inv);
+      let coins = "";
+      if(invSel && invSel.kind==="cripto"){
+        const al = t.alloc || [];
+        coins = `<div class="field"><span class="flabel">¿En qué moneda lo pusiste?</span><div class="hint" style="margin:0 0 8px">Escribe cuántos USDT fueron a cada una y la cantidad que te llegó (la ves en Binance → Spot). Deja en blanco las que no compraste.</div>
+          ${(invSel.holdings||[]).map((h,k)=>{ const a=al.find(x=>x.sym===h.sym)||{}; return `<div class="grid2" style="align-items:end"><div class="field"><label for="fU${k}">USDT a ${esc(h.sym)}</label><input id="fU${k}" data-alloc inputmode="decimal" value="${a.usdt!=null?inStr(a.usdt):""}" placeholder="0,00"></div><div class="field"><label for="fQ${k}">${esc(h.sym)} recibido</label><input id="fQ${k}" data-alloc inputmode="decimal" value="${a.qty!=null?String(a.qty).replace(".",","):""}" placeholder="0,00000000"></div></div>`; }).join("")}</div>`;
+      }
+      body = `<div class="field"><label for="fInv">Va a</label><select id="fInv">${cfg.investments.map(i=>opt(i.id,i.name,t.inv)).join("")}</select></div>
+        ${coins}${amtBox("fAmt", t.amt, coins?"Total invertido (se suma solo)":"¿Cuánto inviertes?")}<div class="field"><span class="flabel">Sale de</span>${accPicker("acct", t.acct, cashAccts())}</div>`;
     }
     return `${sheetHead(editing?"Editar movimiento":"Registrar")}
       <div class="typegrid">${types}</div>
@@ -985,7 +1022,8 @@ function txForm(init){
   };
   const mount = sheet => {
     const g = id => sheet.querySelector("#"+id); const val = id => g(id) ? g(id).value : null;
-    const capture = () => { if(g("fDate")) t.date=g("fDate").value; if(g("fDesc")) t.desc=g("fDesc").value; if(g("fInv")) t.inv=g("fInv").value; if(g("fAmt")) t.amt=g("fAmt").value; if(g("fToAmt")) t.toAmt=g("fToAmt").value; if(g("fRate")) t.rate=parseAmt(g("fRate").value)||undefined; };
+    const capture = () => { if(g("fDate")) t.date=g("fDate").value; if(g("fDesc")) t.desc=g("fDesc").value; if(g("fInv")) t.inv=g("fInv").value; if(g("fAmt")) t.amt=g("fAmt").value; if(g("fToAmt")) t.toAmt=g("fToAmt").value; if(g("fRate")) t.rate=parseAmt(g("fRate").value)||undefined; if(g("fU0")) t.alloc = readAlloc(); };
+    const readAlloc = () => { const inv=cfg.investments.find(i=>i.id===t.inv); if(!inv||inv.kind!=="cripto") return null; return (inv.holdings||[]).map((h,k)=>({sym:h.sym, usdt:parseAmt(val(`fU${k}`)), qty:parseAmt(val(`fQ${k}`))})).filter(x=>!isNaN(x.usdt)||!isNaN(x.qty)).map(x=>({sym:x.sym, usdt:isNaN(x.usdt)?null:x.usdt, qty:isNaN(x.qty)?null:x.qty})); };
     const redraw = () => { capture(); const ns=sheet.cloneNode(false); sheet.replaceWith(ns); ns.innerHTML=draw(); mount(ns); paintIcons(); };
     const update = () => {
       const a = acct(t.acct); const date = val("fDate")||todayStr(); const r0 = rateOn(date);
@@ -1010,6 +1048,7 @@ function txForm(init){
           pv = `Quedarías debiendo <b>${fmt(ti.debt + prev - toAmt)} Bs</b> · del corte faltarían <b>${fmt(Math.max(0, ti.pendienteCorte + prev - toAmt))} Bs</b>`;
           if(a.cur!=="Bs" && !isNaN(amt) && amt>0) pv += `<br>Tasa efectiva ${fmt(toAmt/amt)} Bs/$ (BCV ${fmt(r0)})`; }
       }
+      else if(type==="inversion" && g("fU0")){ const al=readAlloc()||[]; const parts=al.map(x=>{ const q = x.qty!=null ? x.qty : (x.usdt!=null && livePrice({sym:x.sym})>0 ? x.usdt/livePrice({sym:x.sym}) : null); return q!=null?`<b>+${String(+q.toFixed(8)).replace(".",",")} ${esc(x.sym)}</b>${x.qty==null?" (aprox.)":""}`:""; }).filter(Boolean); if(parts.length) pv = `Se suma a tu Earn: ${parts.join(" · ")}`; }
       g("preview").innerHTML = pv; g("preview").hidden = !pv;
     };
     sheet.querySelectorAll(".typegrid button").forEach(b=>b.addEventListener("click",()=>{ capture(); type=b.dataset.type; if(type==="gasto"&&!cfg.cats.gasto.includes(t.cat)) t.cat="Mercado"; if(type==="ingreso"&&!cfg.cats.ingreso.includes(t.cat)) t.cat="Sueldo"; redraw(); }));
@@ -1019,7 +1058,8 @@ function txForm(init){
       update(); }));
     sheet.querySelectorAll("[data-fill]").forEach(b=>b.addEventListener("click",()=>{ g("fToAmt").value = inStr(+b.dataset.fill); update(); }));
     sheet.querySelector("[data-close]").addEventListener("click", closeSheet);
-    sheet.addEventListener("input", e=>{ if(e.target.id==="fDate" && g("fRate")) g("fRate").value = inStr(rateOn(g("fDate").value)); update(); });
+    sheet.addEventListener("input", e=>{ if(e.target.id==="fDate" && g("fRate")) g("fRate").value = inStr(rateOn(g("fDate").value)); if(e.target.matches("[id^=fU]")){ const s=(readAlloc()||[]).reduce((a,x)=>a+(x.usdt||0),0); if(s>0) g("fAmt").value=inStr(+s.toFixed(2)); } update(); });
+    if(g("fInv")) g("fInv").addEventListener("change", ()=>{ t.inv=g("fInv").value; t.alloc=null; redraw(); });
     g("fSave").addEventListener("click", async ()=>{
       const err = m => { g("fErr").textContent=m; g("fErr").hidden=false; };
       const date = val("fDate"); if(!/^\d{4}-\d{2}-\d{2}$/.test(date||"")) return err("Elige una fecha.");
@@ -1040,13 +1080,29 @@ function txForm(init){
         const toAmt = parseAmt(val("fToAmt")); if(!(toAmt>0)) return err("Escribe cuántos Bs abonaste a la tarjeta.");
         if(a.cur==="Bs") amt = toAmt; else if(!(amt>0)) return err(`Escribe cuántos ${curSym(a.cur)} te costó el pago.`);
         Object.assign(rec,{amt, to:"tdc", toAmt, cat:"Pago tarjeta", rate: rateOn(date)}); rec.usd = toUsd(amt, a.cur, date);
+        if(t.interestId) dropTx(t.interestId);
+        if(g("fSettle") && g("fSettle").checked){ rec.settle = true;
+          const before = creditUsd({until:date, exclude:[t.id||"", t.interestId||""]}).tdc || 0;
+          const extra = toAmt/rec.rate - before;
+          if(extra > 0.01){ const it = {id:uid(), type:"gasto", date, acct:"tdc", cat:"Intereses tarjeta", desc:"Intereses y cargos del banco", amt:+(extra*rec.rate).toFixed(2), rate:rec.rate, usd:extra, created:Date.now(), linkPago:rec.id};
+            if(!cfg.cats.gasto.includes("Intereses tarjeta")){ cfg.cats.gasto.push("Intereses tarjeta"); var catDirty=true; }
+            const iym=ymOf(date); months[iym]=[...(months[iym]||[]), it]; rec.interestId = it.id; } }
       } else {
+        const al = (readAlloc()||[]).filter(x=>(x.usdt||0)>0 || (x.qty||0)>0);
+        if(!(amt>0) && al.length) amt = al.reduce((s,x)=>s+(x.usdt||0),0);
         if(!(amt>0)) return err("Escribe un monto mayor que cero.");
+        for(const x of al){ if(x.qty==null){ const p=livePrice({sym:x.sym}); if(!(p>0)) return err(`Escribe cuánto ${x.sym} te llegó.`); x.qty=+(x.usdt/p).toFixed(8); x.est=true; } }
         Object.assign(rec,{amt, inv:val("fInv"), cat:"Inversión"}); rec.usd = toUsd(amt, a.cur, date);
+        const inv = cfg.investments.find(i=>i.id===rec.inv);
+        if(inv && inv.kind==="cripto"){
+          if(t.id && t.alloc0) { unlinkAlloc({...t, alloc:t.alloc0, costAdded:t.costAdded0}); }
+          if(al.length){ applyAlloc(inv, al); rec.alloc = al; if(inv.cost!=null){ inv.cost = +(inv.cost + rec.usd).toFixed(2); rec.costAdded = rec.usd; } }
+          if(al.length || (t.id && t.alloc0)) var invDirty = true;
+        }
       }
       if(t.hist) rec.hist = true;
       if(t.cuotaRef) rec.cuotaRef = t.cuotaRef;
-      let cfgDirty = false;
+      let cfgDirty = (typeof invDirty!=="undefined" && invDirty) || (typeof catDirty!=="undefined" && catDirty);
       if(t.debtId){ const d=(cfg.deudas||[]).find(x=>x.id===t.debtId); rec.debtId=t.debtId; if(d){ let credit = conv(rec.amt, a.cur, d.cur, date); const left = debtLeft(d) + (t.debtPaid||0); if(Math.abs(credit-left) <= left*0.02) credit = left; rec.debtPaid = credit; d.paid = Math.max(0, (d.paid||0) - (t.debtPaid||0) + credit); cfgDirty = true; } }
       if(!t.id && t.cuotaRef){ const pl=(cfg.cuotas||[]).find(x=>x.id===t.cuotaRef.plan); const c=pl&&pl.schedule[t.cuotaRef.idx]; if(c){ c.paid=true; c.paidDate=date; c.txId=rec.id; cfgDirty=true; } }
       const oldYm = t.id ? t._ym : null; const ym = ymOf(date);
@@ -1057,12 +1113,12 @@ function txForm(init){
       if(!t.id && t.pendId){ cfg.pendientes = (cfg.pendientes||[]).filter(p=>p.id!==t.pendId); after = saveCfg(); }
       if(cfgDirty && !after) after = saveCfg();
       closeSheet(); render();
-      const ps = [saveMonth(ym)]; if(oldYm && oldYm!==ym) ps.push(saveMonth(oldYm)); if(after) ps.push(after);
+      const ps = [saveMonth(ym)]; if(oldYm && oldYm!==ym) ps.push(saveMonth(oldYm)); if(after) ps.push(after); for(const y of dropped.splice(0)) if(y!==ym && y!==oldYm) ps.push(saveMonth(y));
       guard(Promise.all(ps), t.id?"Cambios guardados":"Guardado");
     });
     if(g("fDel")) g("fDel").addEventListener("click", ()=>{ const b=g("fDel");
       if(b.dataset.armed!=="1"){ b.dataset.armed="1"; b.textContent="Toca otra vez para eliminar"; return; }
-      months[t._ym] = (months[t._ym]||[]).filter(x=>x.id!==t.id); const ps=[saveMonth(t._ym)]; if(unlinkTx(t)) ps.push(saveCfg()); closeSheet(); render(); guard(Promise.all(ps), "Eliminado"); });
+      months[t._ym] = (months[t._ym]||[]).filter(x=>x.id!==t.id); if(t.interestId) dropTx(t.interestId); const ps=[saveMonth(t._ym)]; for(const y of dropped.splice(0)) if(y!==t._ym) ps.push(saveMonth(y)); if(unlinkTx(t)) ps.push(saveCfg()); closeSheet(); render(); guard(Promise.all(ps), "Eliminado"); });
     update();
     const f = type==="pago_tdc" ? g("fToAmt") : g("fAmt"); if(f && !editing) f.focus({preventScroll:true});
   };
