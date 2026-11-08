@@ -534,9 +534,9 @@ function tdcInfo(){
   const corte = cortes[cortes.length-1] || null; const txs = allTx();
   let pagado=0, compras=0;
   const pagos = txs.filter(t=>t.type==="pago_tdc").sort((a,b)=>b.date.localeCompare(a.date));
-  const comprasList = corte ? txs.filter(t=>t.type==="gasto" && t.acct==="tdc" && t.date>corte.fecha).sort((a,b)=>b.date.localeCompare(a.date)) : [];
+  const comprasList = corte ? txs.filter(t=>!t.hist && t.acct==="tdc" && t.type!=="pago_tdc" && t.date>corte.fecha).sort((a,b)=>b.date.localeCompare(a.date)) : [];
   let pagadoUsd=0;
-  if(corte){ for(const p of pagos) if(p.date>corte.fecha){ pagado += p.toAmt||0; pagadoUsd += (p.toAmt||0)/(p.rate||rateOn(p.date)); } for(const c of comprasList) compras += c.amt; }
+  if(corte){ for(const p of pagos) if(p.date>corte.fecha){ pagado += p.toAmt||0; pagadoUsd += (p.toAmt||0)/(p.rate||rateOn(p.date)); } for(const c of comprasList) compras += (c.type==="ingreso"||c.type==="cobro") ? -c.amt : c.amt; }
   const saldoUsd = corte ? (corte.saldoUsd!=null ? corte.saldoUsd : (corte.saldo||0)/(rateOn(corte.fecha)||rate)) : 0;
   const pendienteCorte = corte ? Math.max(0, saldoUsd - pagadoUsd) * rate : 0;
   const intereses = txs.filter(t=>t.type==="gasto"&&t.acct==="tdc"&&t.cat==="Ajuste del banco").reduce((s,t)=>s+(t.usd||0),0);
@@ -773,7 +773,7 @@ function viewTdc(){
     ${paid?`<button class="btn ${nextAmt>0?"primary":"ghost"} block" type="button" data-act="pay">${icon("credit-card")} Registrar pago</button>`:""}
     <div class="btns"><button class="btn sm ghost" type="button" data-act="corte">${icon("plus")} Llegó un nuevo corte</button><button class="btn sm ghost" type="button" data-act="corte-edit">${icon("pencil")} Editar corte</button><button class="btn sm ghost" type="button" data-act="limit">${icon("gauge")} Límite</button></div>
   </section>
-  <section><h2>Compras desde el ${c?shortDate(c.fecha):"corte"}</h2><div class="card list">${t.comprasList.length?t.comprasList.map(txRow).join(""):`<div class="empty">Sin compras nuevas.</div>`}</div></section>
+  <section><h2>Movimientos de la tarjeta desde el ${c?shortDate(c.fecha):"corte"}</h2><div class="card list">${t.comprasList.length?t.comprasList.map(txRow).join(""):`<div class="empty">Sin compras nuevas.</div>`}</div></section>
   <section><h2>Pagos</h2><div class="card list">${t.pagos.length?t.pagos.slice(0,10).map(txRow).join(""):`<div class="empty">Aún no hay pagos.</div>`}</div></section>`;
 }
 
@@ -1421,7 +1421,8 @@ function payDebt(d){ const bs=d.cur==="Bs"; const left=+debtLeft(d).toFixed(2);
 
 let sh = null;
 function sharedForm(){
-  sh = sh || {desc:"", date:todayStr(), cur:"Bs", total:"", cat:"Restaurantes", payer:"yo", mode:"iguales", n:3, people:[{name:"",amt:""},{name:"",amt:""}], other:"", mine:"", acct:"tdc", due:""};
+  if(sh && sh.made!==todayStr()) sh=null; // un borrador de otro día se descarta para que la fecha no quede vieja
+  sh = sh || {made:todayStr(), desc:"", date:todayStr(), cur:"Bs", total:"", cat:"Restaurantes", payer:"yo", mode:"iguales", n:3, people:[{name:"",amt:""},{name:"",amt:""}], other:"", mine:"", acct:null, due:""};
   const draw = () => {
     const seg=(key,opts)=>`<div class="seg2">${opts.map(([v,l])=>`<button type="button" data-sh="${key}" data-v="${v}" aria-pressed="${sh[key]===v}">${l}</button>`).join("")}</div>`;
     const accs = activeAccts();
@@ -1461,11 +1462,11 @@ function sharedForm(){
       } else { const mine = sh.mine.trim()? parseAmt(sh.mine) : per; return {tot, mine}; } };
     const update = () => { const c = calc(); const pv=g("shPrev");
       if(isNaN(c.tot)){ pv.hidden=true; return; }
-      pv.hidden=false; pv.innerHTML = sh.payer==="yo" ? `Tu gasto: <b>${m(c.mine)}</b> · Te deben: <b>${m(c.others)}</b>${c.mine<0?' <span class="neg">— los montos suman más que el total</span>':""}` : `Le debes <b>${isNaN(c.mine)?"—":m(c.mine)}</b> a ${esc(sh.other||"esa persona")}. Se registra como gasto cuando le pagues.`; };
+      pv.hidden=false; pv.innerHTML = sh.payer==="yo" ? `Tu gasto: <b>${m(c.mine)}</b> · Te deben: <b>${m(c.others)}</b>${c.mine<0?' <span class="neg">— los montos suman más que el total</span>':""}<br>${sh.acct&&acct(sh.acct)?`Sale de <b>${esc(acct(sh.acct).name)}</b>: ${m(c.tot)}`:'<span class="neg">Elige con qué pagaste</span>'}` : `Le debes <b>${isNaN(c.mine)?"—":m(c.mine)}</b> a ${esc(sh.other||"esa persona")}. Se registra como gasto cuando le pagues.`; };
     sheet.querySelector("[data-close]").addEventListener("click", closeSheet);
-    sheet.querySelectorAll("[data-sh]").forEach(b=>b.addEventListener("click",()=>{ capture(); sh[b.dataset.sh]=b.dataset.v; if(b.dataset.sh==="cur") sh.acct = sh.cur==="Bs"?"tdc":"binance"; redraw(); }));
+    sheet.querySelectorAll("[data-sh]").forEach(b=>b.addEventListener("click",()=>{ capture(); sh[b.dataset.sh]=b.dataset.v; redraw(); }));
     sheet.querySelectorAll("[data-shstep]").forEach(b=>b.addEventListener("click",()=>{ capture(); sh.n=Math.max(2,Math.min(20,sh.n+ +b.dataset.shstep)); while(sh.people.length<sh.n-1) sh.people.push({name:"",amt:""}); sh.people.length=sh.n-1; redraw(); }));
-    const ap = sheet.querySelector("[data-shacct]"); if(ap) ap.addEventListener("click", e=>{ const b=e.target.closest("button[data-v]"); if(!b) return; sh.acct=b.dataset.v; ap.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b))); });
+    const ap = sheet.querySelector("[data-shacct]"); if(ap) ap.addEventListener("click", e=>{ const b=e.target.closest("button[data-v]"); if(!b) return; sh.acct=b.dataset.v; ap.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b))); update(); });
     sheet.addEventListener("input", update);
     g("shSave").addEventListener("click", ()=>{
       const err = t => { g("shErr").textContent=t; g("shErr").hidden=false; };
@@ -1474,6 +1475,7 @@ function sharedForm(){
       if(sh.payer==="yo"){
         if(sh.people.some(p=>!p.name.trim())) return err("Escribe el nombre de cada persona.");
         if(c.mine<0) return err("Los montos de los demás suman más que el total.");
+        if(!sh.acct || !acct(sh.acct)) return err("Elige con qué pagaste (Mercantil, Binance, efectivo o tarjeta).");
         const a=acct(sh.acct); const r=rateOn(date);
         const toAcct = v => +conv(v, sh.cur, a.cur, date).toFixed(2);
         if(c.mine>0){ const amt=toAcct(c.mine); ps.push(addTx({id:uid(), type:"gasto", date, acct:a.id, amt, cat:sh.cat, desc:`${desc} (tu parte)`, usd: conv(c.mine, sh.cur, "USD", date), rate: a.cur==="Bs"?r:undefined, created:Date.now()})); }
@@ -1483,7 +1485,7 @@ function sharedForm(){
         if(!sh.other.trim()) return err("Escribe quién pagó."); if(!(c.mine>0)) return err("Revisa tu parte.");
         cfg.deudas=[...(cfg.deudas||[]), {id:"d"+Date.now().toString(36), dir:"debo", person:sh.other.trim(), desc, cur:sh.cur, amt:+c.mine.toFixed(2), paid:0, date, due:sh.due||null, cat:sh.cat}];
       }
-      ps.push(saveCfg()); sh=null; closeSheet(); pagosSeg="amigos"; render(); guard(Promise.all(ps),"Guardado");
+      ps.push(saveCfg()); const paidFrom = sh.payer==="yo" ? acct(sh.acct).name : null; sh=null; closeSheet(); pagosSeg="amigos"; render(); guard(Promise.all(ps), paidFrom?`Guardado · salió de ${paidFrom} y está en Movimientos`:"Guardado");
     });
     update();
   };
