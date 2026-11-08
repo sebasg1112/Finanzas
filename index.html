@@ -534,9 +534,9 @@ function tdcInfo(){
   const corte = cortes[cortes.length-1] || null; const txs = allTx();
   let pagado=0, compras=0;
   const pagos = txs.filter(t=>t.type==="pago_tdc").sort((a,b)=>b.date.localeCompare(a.date));
-  const comprasList = corte ? txs.filter(t=>t.type==="gasto" && t.acct==="tdc" && t.date>corte.fecha).sort((a,b)=>b.date.localeCompare(a.date)) : [];
+  const comprasList = corte ? txs.filter(t=>!t.hist && t.acct==="tdc" && t.type!=="pago_tdc" && t.date>corte.fecha).sort((a,b)=>b.date.localeCompare(a.date)) : [];
   let pagadoUsd=0;
-  if(corte){ for(const p of pagos) if(p.date>corte.fecha){ pagado += p.toAmt||0; pagadoUsd += (p.toAmt||0)/(p.rate||rateOn(p.date)); } for(const c of comprasList) compras += c.amt; }
+  if(corte){ for(const p of pagos) if(p.date>corte.fecha){ pagado += p.toAmt||0; pagadoUsd += (p.toAmt||0)/(p.rate||rateOn(p.date)); } for(const c of comprasList) compras += (c.type==="ingreso"||c.type==="cobro") ? -c.amt : c.amt; }
   const saldoUsd = corte ? (corte.saldoUsd!=null ? corte.saldoUsd : (corte.saldo||0)/(rateOn(corte.fecha)||rate)) : 0;
   const pendienteCorte = corte ? Math.max(0, saldoUsd - pagadoUsd) * rate : 0;
   const intereses = txs.filter(t=>t.type==="gasto"&&t.acct==="tdc"&&t.cat==="Ajuste del banco").reduce((s,t)=>s+(t.usd||0),0);
@@ -773,7 +773,7 @@ function viewTdc(){
     ${paid?`<button class="btn ${nextAmt>0?"primary":"ghost"} block" type="button" data-act="pay">${icon("credit-card")} Registrar pago</button>`:""}
     <div class="btns"><button class="btn sm ghost" type="button" data-act="corte">${icon("plus")} Llegó un nuevo corte</button><button class="btn sm ghost" type="button" data-act="corte-edit">${icon("pencil")} Editar corte</button><button class="btn sm ghost" type="button" data-act="limit">${icon("gauge")} Límite</button></div>
   </section>
-  <section><h2>Compras desde el ${c?shortDate(c.fecha):"corte"}</h2><div class="card list">${t.comprasList.length?t.comprasList.map(txRow).join(""):`<div class="empty">Sin compras nuevas.</div>`}</div></section>
+  <section><h2>Movimientos de la tarjeta desde el ${c?shortDate(c.fecha):"corte"}</h2><div class="card list">${t.comprasList.length?t.comprasList.map(txRow).join(""):`<div class="empty">Sin compras nuevas.</div>`}</div></section>
   <section><h2>Pagos</h2><div class="card list">${t.pagos.length?t.pagos.slice(0,10).map(txRow).join(""):`<div class="empty">Aún no hay pagos.</div>`}</div></section>`;
 }
 
