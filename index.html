@@ -503,6 +503,7 @@ function creditUsd(opts){ const o=opts||{}; const out={};
   const mv = (id, cash, t, rate) => { if(out[id]==null) return; out[id] -= cash / (rate || t.rate || rateOn(t.date) || todayRate()); };
   for(const t of allTx()){
     if(t.hist) continue; if(o.until && t.date>o.until) continue; if(o.exclude && o.exclude.includes(t.id)) continue;
+    if(t.date < TDC_OPEN_DATE()) continue; // el saldo inicial (estado de cuenta del 19 oct) ya incluye todo lo anterior
     if(t.type==="gasto"){ if(out[t.acct]!=null) out[t.acct] += (t.usd!=null ? t.usd : t.amt/(t.rate||rateOn(t.date))); }
     else if(t.type==="ingreso") mv(t.acct, t.amt, t);
     else if(t.type==="cambio"){ mv(t.acct, -t.amt, t); mv(t.to, t.toAmt||0, t); }
