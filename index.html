@@ -298,6 +298,18 @@ input.amtin[readonly]{background:var(--sunk)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 30px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;z-index:30;font-size:.9rem;font-weight:500}
 .empty{padding:28px 18px;text-align:center;color:var(--muted);display:grid;gap:8px;justify-items:center}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .2s ease-out}@keyframes up{from{transform:translateY(20px);opacity:.6}}}
+
+.ratesline{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 14px;border:0;width:100%;text-align:left}
+.ratesline .ri{display:grid;gap:1px;min-width:0}
+.ratesline .ri>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ratesline b{font-weight:700;font-size:1rem}
+.tri.one>.card{display:flex;align-items:center;gap:12px;text-align:left}
+.tri.one>.card b{margin-left:auto}
+.hero-note{display:block;margin-top:-4px;border:0;background:none;padding:0;color:inherit;opacity:.85;font-size:.9rem;text-align:left}
+.hero-note b{font-weight:700;white-space:nowrap}
+.att.more{justify-content:center;font-weight:600;color:var(--accent);padding:12px 14px;min-height:46px;width:100%;border:0;background:none;display:flex}
+.inline-sum{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;font-size:.95rem;padding:0 2px}
+.inline-sum b{font-weight:700}
 /* ===== Sensación de app nativa ===== */
 html{-webkit-text-size-adjust:100%}
 *{-webkit-tap-highlight-color:transparent}
@@ -562,7 +574,7 @@ const softIco = (name, color) => `<span class="ico soft" style="--k:${color}">${
 let mcp=null, live={}, liveStatus=null, watching=false;
 let pagosSeg="fijos"; try{ const p=localStorage.getItem("fin.pseg"); if(p) pagosSeg=p; }catch(e){}
 let db=null, cfg=null, rates={}, ratesEur={}, ratesUsdt={}, months={}, cfgReady=false, monthsReady=false, ratesReady=false;
-let viewAnim=null; const TAB_ORDER=["inicio","movs","tdc","fijos","pres","inv"];
+let viewAnim=null, showAllAlerts=false; const TAB_ORDER=["inicio","movs","tdc","fijos","pres","inv"];
 let tab="inicio", selYm=ymOf(todayStr()), movFilter="todos", movSearch="", budgetEdit=false, hideInv=true;
 try { const t=localStorage.getItem("fin.tab"); if(t && t!=="inv") tab=t; } catch(e){}
 
@@ -761,7 +773,8 @@ function ratesBar(){
   const ago = k => !k ? "sin dato" : k===today ? "hoy" : shortDate(k);
   const chip = (lbl, val, k, ic, col) => `<button class="card ratechip" type="button" data-act="rate">${softIco(ic,col)}<span class="small muted">${lbl}</span><b>${val?fmt(val):"—"}</b><span class="small ${k===today?"pos":"muted"}">${ago(k)}</span></button>`;
   const tomorrow = Object.keys(rates).filter(x=>x>today).sort()[0];
-  return `<section class="tri">${chip("Dólar BCV", kU&&rates[kU], kU, "dollar-sign","var(--a-efectivo)")}${chip("Euro BCV", kE&&ratesEur[kE], kE, "euro","var(--c3)")}${chip("USDT P2P", kT&&ratesUsdt[kT], kT, "coins","var(--a-binance)")}</section>
+  const item = (lbl, val, k) => `<span class="ri"><span class="muted small">${lbl}${k&&k!==today?` · ${ago(k)}`:""}</span><b class="num">${val?fmt(val):"—"}</b></span>`;
+  return `<button class="card ratesline" type="button" data-act="rate">${item("Dólar", kU&&rates[kU], kU)}${item("Euro", kE&&ratesEur[kE], kE)}${item("USDT", kT&&ratesUsdt[kT], kT)}</button>
   ${tomorrow?`<div class="small muted" style="margin-top:-14px">${icon("calendar")} El BCV ya publicó ${fmt(rates[tomorrow])} Bs/$ para el ${shortDate(tomorrow)}</div>`:""}`;
 }
 function viewInicio(){
@@ -769,10 +782,10 @@ function viewInicio(){
   const accs = activeAccts().filter(a=>a.id!=="fondo");
   for(const a of accs) if(!a.credit) cash += nowUsd(bal[a.id]||0, a.cur);
   const debtUsd = nowUsd(bal.tdc||0,"Bs");
-  const cards = accs.map(a=>{ const v=bal[a.id]||0; const u=nowUsd(v,a.cur);
+  const cards = accs.filter(a=>!a.credit).map(a=>{ const v=bal[a.id]||0; const u=nowUsd(v,a.cur);
     return `<button class="card acc" type="button" data-go="${a.credit?"tdc":"movs"}">${ico(ACC_ICON[a.id]||"wallet", accColor(a.id))}
       <div><div class="small muted">${esc(a.credit?"Tarjeta (deuda)":a.name)}</div><div class="amt ${a.credit?"neg":""}">${a.credit?"−":""}${usd(Math.abs(u))}</div>
-      <div class="small muted num">${a.cur==="USD"?"&nbsp;":`${fmt0(v)} ${a.cur}`}</div></div></button>`; }).join("");
+      ${a.cur==="Bs"?`<div class="small muted num">${fmt0(v)} Bs</div>`:""}</div></button>`; }).join("");
   const fondo = cfg.accounts.find(a=>a.id==="fondo");
   const st = monthStats(selYm); const al = alerts();
   const sorted = Object.entries(st.byCat).sort((a,b)=>b[1]-a[1]);
@@ -781,25 +794,20 @@ function viewInicio(){
   return `
   <section class="hero">
     <div><div class="label">Dinero disponible</div><div class="big">${usd(cash)}</div></div>
-    <div class="hero-split">
-      <div><span class="label">Deuda tarjeta</span><span class="v num neg">−${usd(debtUsd)}</span></div>
-      <div><span class="label">Libre real</span><span class="v num">${usd(cash-debtUsd)}</span></div>
-    </div>
+    ${debtUsd>0.5?`<button class="hero-note" type="button" data-go="tdc">Tarjeta <b class="num">−${usd(debtUsd)}</b> · si la pagas te quedan <b class="num ${cash-debtUsd<0?"neg":""}">${usd(cash-debtUsd)}</b></button>`:""}
   </section>
   ${ratesBar()}
   <section><div class="strip">${cards}</div></section>
-  ${(()=>{ const o=obligations(); if(o.cuotas+o.debo+o.meDeben<0.01) return ""; return `<section class="tri">
-    <button class="card" type="button" data-go="fijos" data-seg="cuotas">${softIco("shopping-bag","var(--c2)")}<span class="small muted">En cuotas</span><b>${usd0(o.cuotas)}</b></button>
-    <button class="card" type="button" data-go="fijos" data-seg="amigos">${softIco("arrow-up-right","var(--bad)")}<span class="small muted">Debes</span><b class="${o.debo>0?"neg":""}">${usd0(o.debo)}</b></button>
-    <button class="card" type="button" data-go="fijos" data-seg="amigos">${softIco("arrow-down-left","var(--ok)")}<span class="small muted">Te deben</span><b class="pos">${usd0(o.meDeben)}</b></button></section>`; })()}
+  ${(()=>{ const o=obligations(); const it=[];
+    if(o.cuotas>=0.01) it.push(`<button class="card" type="button" data-go="fijos" data-seg="cuotas">${softIco("shopping-bag","var(--c2)")}<span class="small muted">En cuotas</span><b>${usd0(o.cuotas)}</b></button>`);
+    if(o.debo>=0.01) it.push(`<button class="card" type="button" data-go="fijos" data-seg="amigos">${softIco("arrow-up-right","var(--bad)")}<span class="small muted">Debes</span><b class="neg">${usd0(o.debo)}</b></button>`);
+    if(o.meDeben>=0.01) it.push(`<button class="card" type="button" data-go="fijos" data-seg="amigos">${softIco("arrow-down-left","var(--ok)")}<span class="small muted">Te deben</span><b class="pos">${usd0(o.meDeben)}</b></button>`);
+    return it.length ? `<section class="tri${it.length===1?" one":""}" style="grid-template-columns:repeat(${it.length},minmax(0,1fr))">${it.join("")}</section>` : ""; })()}
   ${al.length?`<section><div class="sechead"><h2>Para atender</h2><span class="pill ${al.some(a=>a.cls==="bad")?"bad":"warn"}">${al.length}</span></div>
-    <div class="card list">${al.map(a=>`<button class="att ${a.cls}" type="button" data-go="${a.go}" ${a.seg?`data-seg="${a.seg}"`:""}><span class="ico">${icon(a.icon)}</span><span class="fill"><span class="t" style="display:block">${esc(a.t)}</span><span class="s" style="display:block">${esc(a.s)}</span></span><span class="chev">${icon("chevron-right")}</span></button>`).join("")}</div></section>`:""}
+    <div class="card list">${(showAllAlerts?al:al.slice(0,3)).map(a=>`<button class="att ${a.cls}" type="button" data-go="${a.go}" ${a.seg?`data-seg="${a.seg}"`:""}><span class="ico">${icon(a.icon)}</span><span class="fill"><span class="t" style="display:block">${esc(a.t)}</span><span class="s" style="display:block">${esc(a.s)}</span></span><span class="chev">${icon("chevron-right")}</span></button>`).join("")}${al.length>3?`<button class="att more" type="button" data-act="allalerts">${showAllAlerts?"Ver menos":`Ver todo (${al.length})`}</button>`:""}</div></section>`:""}
   <section>
     ${monthBar()}
-    <div class="inout">
-      <div class="card">${softIco("arrow-down-left","var(--ok)")}<div><div class="small muted">Entró</div><div class="v pos">${usd0(st.ing)}</div></div></div>
-      <div class="card">${softIco("arrow-up-right","var(--bad)")}<div><div class="small muted">Salió</div><div class="v">${usd0(st.gas)}</div></div></div>
-    </div>
+    <div class="inline-sum"><span class="muted">Entró</span> <b class="num pos">${usd0(st.ing)}</b><span class="muted">·</span><span class="muted">Salió</span> <b class="num">${usd0(st.gas)}</b></div>
     <div class="card donut-wrap">
       <div class="donut" style="background:${conic(top, st.gas||1)}"><div class="c"><span class="small muted">Gastado</span><span class="big">${usd0(st.gas)}</span></div></div>
       <div class="legend">${top.length?top.map(p=>`<div><span class="dot" style="background:${p.c}"></span><span class="fill t" style="font-weight:400">${esc(p.n)}</span><span class="num muted">${usd0(p.v)}</span></div>`).join(""):'<div class="muted">Sin gastos este mes.</div>'}</div>
@@ -1614,6 +1622,7 @@ document.addEventListener("click", e=>{
   else if(act==="nextm"){ selYm=shiftYm(selYm,1); viewAnim="view-in-r"; render(); }
   else if(act==="new") txForm(tab==="tdc"?{type:"pago_tdc"}:tab==="inv"?{type:"inversion"}:null);
   else if(act==="rate") rateForm();
+  else if(act==="allalerts"){ showAllAlerts=!showAllAlerts; render(); }
   else if(act==="calc") calcForm();
   else if(act==="newplan") planForm(null);
   else if(act==="editplan") planForm((cfg.cuotas||[]).find(x=>x.id===id));
