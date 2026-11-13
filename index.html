@@ -298,6 +298,70 @@ input.amtin[readonly]{background:var(--sunk)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 30px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;z-index:30;font-size:.9rem;font-weight:500}
 .empty{padding:28px 18px;text-align:center;color:var(--muted);display:grid;gap:8px;justify-items:center}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .2s ease-out}@keyframes up{from{transform:translateY(20px);opacity:.6}}}
+/* ===== Sensación de app nativa ===== */
+html{-webkit-text-size-adjust:100%}
+*{-webkit-tap-highlight-color:transparent}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior-y:none}
+input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+button,a,.row,[data-act],[data-tab]{touch-action:manipulation}
+/* botones que se hunden al tocarlos */
+@media (prefers-reduced-motion:no-preference){
+  button,.row{transition:transform .18s cubic-bezier(.2,.8,.2,1),background-color .18s,opacity .18s}
+  button:active:not(:disabled){transform:scale(.96)}
+  .row:active,.swipe .row:active{transform:none;background:var(--sunk)}
+  nav.bottom button:active{transform:scale(.88)}
+  .fab:active{transform:scale(.9)!important}
+}
+/* encabezado tipo iOS: título grande que se achica al hacer scroll */
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;margin-inline:calc(-1*max(16px,env(safe-area-inset-left,0px)));padding-inline:max(16px,env(safe-area-inset-left,0px));transition:padding .25s ease}
+header.top::before{content:"";position:absolute;inset:0;z-index:-1;opacity:0;background:color-mix(in srgb,var(--solid) 78%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-bottom:1px solid var(--line);transition:opacity .25s ease}
+header.top h1{font-size:1.2rem;transition:font-size .25s cubic-bezier(.2,.8,.2,1)}
+header.top h1 #hdrTitle{overflow:hidden;text-overflow:ellipsis}
+header.top.scrolled{padding-block:8px 8px}
+header.top.scrolled::before{opacity:1}
+header.top.scrolled h1{font-size:1.05rem}
+/* cambio de pestaña */
+@media (prefers-reduced-motion:no-preference){
+  .view-in-r main{animation:viewR .32s cubic-bezier(.2,.8,.2,1)}
+  .view-in-l main{animation:viewL .32s cubic-bezier(.2,.8,.2,1)}
+  .view-in main{animation:viewF .28s ease-out}
+  @keyframes viewR{from{opacity:0;transform:translateX(24px)}}
+  @keyframes viewL{from{opacity:0;transform:translateX(-24px)}}
+  @keyframes viewF{from{opacity:0;transform:translateY(8px)}}
+}
+/* hojas que suben desde abajo y se cierran deslizando */
+.scrim{transition:background-color .3s ease}
+.sheet{will-change:transform;position:relative;padding-top:26px!important}
+.sheet .grabber{position:absolute;top:8px;left:50%;width:38px;height:5px;margin-left:-19px;border-radius:3px;background:var(--line);background:color-mix(in srgb,var(--fg) 22%,transparent)}
+@media (prefers-reduced-motion:no-preference){
+  .sheet{animation:sheetUp .42s cubic-bezier(.32,.72,0,1)!important}
+  .scrim{animation:scrimIn .3s ease}
+  @keyframes sheetUp{from{transform:translateY(100%)}}
+  @keyframes scrimIn{from{background-color:rgba(8,18,15,0)}}
+  .scrim.closing{background-color:rgba(8,18,15,0)!important;pointer-events:none}
+  .scrim.closing .sheet{transform:translateY(105%)!important;transition:transform .28s cubic-bezier(.4,0,1,1)!important}
+}
+.sheet.dragging{transition:none!important;animation:none!important}
+/* deslizar un movimiento para borrarlo */
+.swipe{position:relative;overflow:hidden}
+.swipe .row{position:relative;z-index:1;will-change:transform}
+.swipe-acts{position:absolute;top:0;right:0;bottom:0;width:96px;display:flex;opacity:0;transition:opacity .15s}
+.swipe.reveal .swipe-acts{opacity:1}
+.swipe.reveal .row{background:var(--solid)}
+.swipe-acts button{flex:1;border:0;background:var(--bad);color:#fff;font-weight:700;font-size:.82rem;display:grid;place-items:center;align-content:center;gap:2px}
+.swipe-acts button svg{width:18px;height:18px}
+.swipe-acts button[data-armed="1"]{background:#8E1F10}
+/* jalar hacia abajo para actualizar */
+.ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:11;width:36px;height:36px;margin-left:-18px;border-radius:50%;background:var(--solid);box-shadow:var(--shadow);display:grid;place-items:center;color:var(--accent);transform:translateY(-60px);opacity:0;pointer-events:none}
+.ptr svg{width:18px;height:18px}
+.ptr.spin svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* siluetas mientras carga */
+.skel{background:var(--sunk);border-radius:12px;position:relative;overflow:hidden}
+.skel::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--solid) 55%,transparent),transparent);animation:shimmer 1.3s infinite}
+@keyframes shimmer{to{transform:translateX(100%)}}
+.toast{animation:toastIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,12px) scale(.96)}}
 </style>
 
 <div class="aurora" aria-hidden="true"></div>
@@ -310,7 +374,7 @@ input.amtin[readonly]{background:var(--sunk)}
       <button class="circle-btn" id="vaultBtn" data-act="vault" type="button" aria-label="Inversiones" aria-pressed="false"><i data-lucide="lock"></i></button>
     </div>
   </header>
-  <div id="view"><div class="empty" style="padding-top:80px"><span class="logo" style="width:72px;height:72px;border-radius:20px"><svg style="width:48px;height:48px" viewBox="0 0 120 120" aria-hidden="true"><path d="M56 12a48 48 0 0 0 0 96z" fill="#0B6B58"></path><path d="M64 12a48 48 0 0 1 0 96z" fill="#2F5BD0"></path></svg></span>Cargando tus cuentas…</div></div>
+  <div id="view"><main aria-busy="true" aria-label="Cargando tus cuentas"><div class="skel" style="height:168px;border-radius:20px"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="skel" style="height:74px"></div><div class="skel" style="height:74px"></div></div><div class="skel" style="height:22px;width:40%"></div><div class="card list"><div class="row"><div class="skel" style="width:40px;height:40px;border-radius:50%"></div><div class="fill" style="display:grid;gap:6px"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:10px;width:40%"></div></div><div class="skel" style="height:14px;width:56px"></div></div><div class="row"><div class="skel" style="width:40px;height:40px;border-radius:50%"></div><div class="fill" style="display:grid;gap:6px"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:10px;width:40%"></div></div><div class="skel" style="height:14px;width:56px"></div></div><div class="row"><div class="skel" style="width:40px;height:40px;border-radius:50%"></div><div class="fill" style="display:grid;gap:6px"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:10px;width:40%"></div></div><div class="skel" style="height:14px;width:56px"></div></div><div class="row"><div class="skel" style="width:40px;height:40px;border-radius:50%"></div><div class="fill" style="display:grid;gap:6px"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:10px;width:40%"></div></div><div class="skel" style="height:14px;width:56px"></div></div><div class="row"><div class="skel" style="width:40px;height:40px;border-radius:50%"></div><div class="fill" style="display:grid;gap:6px"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:10px;width:40%"></div></div><div class="skel" style="height:14px;width:56px"></div></div></div></main></div>
 </div>
 <nav class="bottom" id="tabs" role="tablist">
   <div class="in">
@@ -366,24 +430,44 @@ input.amtin[readonly]{background:var(--sunk)}
     });
   }
   window.__finSetup = showSetup;
-  let all = null;
-  const load = () => all || (all = run("cargarTodo").then(t => JSON.parse(t)));
+  // Abre al instante: muestra la última copia guardada en este teléfono y trae lo nuevo de la hoja por detrás.
+  const CACHE_KEY = "fin.cache.v1";
+  const readCache = () => { try { const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); return c && c.config ? c : null; } catch(e){ return null; } };
+  const writeCache = () => { try { if(all) localStorage.setItem(CACHE_KEY, JSON.stringify(all)); } catch(e){} };
+  let all = null, dirtyAt = 0, loading = null; const listeners = [];
+  const emitAll = () => { for(const l of listeners) l(); };
+  const fetchFresh = () => { const t0 = Date.now();
+    return run("cargarTodo").then(t => JSON.parse(t)).then(fresh => {
+      const apply = () => {
+        if(dirtyAt > t0) return; // guardaste algo mientras cargaba: lo de este teléfono es más nuevo
+        if(document.getElementById("scrim")) return void setTimeout(apply, 600); // no cambiar datos con un formulario abierto
+        all = fresh; writeCache(); emitAll(); };
+      apply(); return fresh; }); };
+  const load = () => { if(loading) return loading;
+    const cached = readCache();
+    if(cached){ all = cached; loading = Promise.resolve(cached);
+      fetchFresh().catch(e => { window.dispatchEvent(new CustomEvent("fin:offline", {detail:e})); }); }
+    else loading = fetchFresh().then(fresh => all);
+    return loading; };
+  window.__finRefresh = () => fetchFresh();
   const meta = {fromCache:false, hasPendingWrites:false};
   const snapDoc = (id, data) => ({id, exists: data != null, data: () => data, metadata: meta});
   const DB = {
     doc(path){
       return {
         onSnapshot(next, onErr){
-          load().then(d => {
-            if(path === "config/main") next(snapDoc("main", d.config));
+          const emit = () => { const d = all;
+            if(path === "config/main") next(snapDoc("main", JSON.parse(JSON.stringify(d.config))));
             else if(path === "rates/bcv") next(snapDoc("bcv", {bcv:d.rates.bcv||{}, eur:d.rates.eur||{}, usdt:d.rates.usdt||{}}));
-            else next(snapDoc(path, null));
-          }).catch(e => onErr && onErr(e));
+            else next(snapDoc(path, null)); };
+          listeners.push(emit);
+          load().then(emit).catch(e => onErr && onErr(e));
           return () => {};
         },
         set(data){
-          if(path === "config/main") return run("guardarConfig", JSON.stringify(data));
-          if(path === "rates/bcv") return run("guardarTasas", JSON.stringify(data));
+          dirtyAt = Date.now();
+          if(path === "config/main"){ if(all){ all.config = JSON.parse(JSON.stringify(data)); writeCache(); } return run("guardarConfig", JSON.stringify(data)); }
+          if(path === "rates/bcv"){ if(all){ all.rates = JSON.parse(JSON.stringify(data)); writeCache(); } return run("guardarTasas", JSON.stringify(data)); }
           return Promise.resolve();
         }
       };
@@ -391,11 +475,12 @@ input.amtin[readonly]{background:var(--sunk)}
     collection(path){
       return {
         onSnapshot(next, onErr){
-          load().then(d => next({metadata: meta, docs: Object.keys(d.months).map(ym => snapDoc(ym, {items: d.months[ym]}))}))
-            .catch(e => onErr && onErr(e));
+          const emit = () => { const d = all; next({metadata: meta, docs: Object.keys(d.months).map(ym => snapDoc(ym, {items: JSON.parse(JSON.stringify(d.months[ym]))}))}); };
+          listeners.push(emit);
+          load().then(emit).catch(e => onErr && onErr(e));
           return () => {};
         },
-        doc(ym){ return { set: data => run("guardarMes", ym, JSON.stringify(data.items || [])) }; }
+        doc(ym){ return { set: data => { dirtyAt = Date.now(); if(all){ all.months[ym] = JSON.parse(JSON.stringify(data.items || [])); writeCache(); } return run("guardarMes", ym, JSON.stringify(data.items || [])); } }; }
       };
     }
   };
@@ -477,6 +562,7 @@ const softIco = (name, color) => `<span class="ico soft" style="--k:${color}">${
 let mcp=null, live={}, liveStatus=null, watching=false;
 let pagosSeg="fijos"; try{ const p=localStorage.getItem("fin.pseg"); if(p) pagosSeg=p; }catch(e){}
 let db=null, cfg=null, rates={}, ratesEur={}, ratesUsdt={}, months={}, cfgReady=false, monthsReady=false, ratesReady=false;
+let viewAnim=null; const TAB_ORDER=["inicio","movs","tdc","fijos","pres","inv"];
 let tab="inicio", selYm=ymOf(todayStr()), movFilter="todos", movSearch="", budgetEdit=false, hideInv=true;
 try { const t=localStorage.getItem("fin.tab"); if(t && t!=="inv") tab=t; } catch(e){}
 
@@ -639,7 +725,10 @@ function invValue(i){
 }
 
 // ---------- rendering ----------
-function txRow(t){
+function txRow(t){ return `<div class="swipe" data-sid="${esc(t.id)}" data-sym="${ymOf(t.date)}"><div class="swipe-acts" aria-hidden="true"><button type="button" data-act="swdel" tabindex="-1" aria-label="Borrar">${icon("trash-2")}<span>Borrar</span></button></div>${txRowInner(t)}</div>`; }
+function deleteTx(t, ym){ months[ym]=(months[ym]||[]).filter(x=>x.id!==t.id); if(t.interestId) dropTx(t.interestId);
+  const ps=[saveMonth(ym)]; for(const y of dropped.splice(0)) if(y!==ym) ps.push(saveMonth(y)); if(unlinkTx(t)) ps.push(saveCfg()); render(); return guard(Promise.all(ps),"Eliminado"); }
+function txRowInner(t){
   const a = acct(t.acct); const [ic, col] = txIcon(t);
   const title = t.desc || t.cat || TYPE[t.type][0]; let sub = `${t.cat||""} · ${a.name}`;
   let main, second="";
@@ -973,7 +1062,8 @@ function render(){
   const v = {inicio:viewInicio, movs:viewMovs, tdc:viewTdc, fijos:viewPagos, pres:viewPres, inv:viewInv}[tab] || viewInicio;
   const focusSearch = document.activeElement && document.activeElement.id==="movSearch";
   const pos = focusSearch ? document.activeElement.selectionStart : 0;
-  $("#view").innerHTML = `<main>${v()}</main>`;
+  const vw=$("#view"); vw.innerHTML = `<main>${v()}</main>`;
+  vw.classList.remove("view-in","view-in-r","view-in-l"); if(viewAnim){ void vw.offsetWidth; vw.classList.add(viewAnim); viewAnim=null; }
   $("#fab").hidden = false;
   paintIcons();
   if(focusSearch){ const s=$("#movSearch"); if(s){ s.focus(); try{s.setSelectionRange(pos,pos)}catch(e){} } }
@@ -992,13 +1082,31 @@ async function guard(p, okMsg){
 }
 
 // ---------- sheets ----------
+const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function openSheet(html, onMount){
-  $("#sheetHost").innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
-  $("#scrim").addEventListener("click", e=>{ if(e.target.id==="scrim") closeSheet(); });
-  onMount && onMount($("#sheetHost .sheet"));
+  const host=$("#sheetHost"); host.querySelectorAll(".scrim").forEach(x=>x.remove());
+  const scrim=document.createElement("div"); scrim.className="scrim"; scrim.id="scrim";
+  scrim.innerHTML=`<div class="sheet" role="dialog" aria-modal="true"><span class="grabber" aria-hidden="true"></span>${html}</div>`;
+  host.appendChild(scrim); const sheet=scrim.querySelector(".sheet");
+  scrim.addEventListener("click", e=>{ if(e.target===scrim) closeSheet(); });
+  sheetDrag(sheet);
+  onMount && onMount(sheet);
   paintIcons();
 }
-function closeSheet(){ $("#sheetHost").innerHTML=""; }
+function closeSheet(){ const sc=$("#scrim"); if(!sc) return; sc.removeAttribute("id"); sc.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));
+  const sh=sc.querySelector(".sheet"); if(sh){ sh.classList.remove("dragging"); }
+  if(REDUCED){ sc.remove(); return; } void sc.offsetWidth; sc.classList.add("closing"); setTimeout(()=>sc.remove(), 300); }
+// Cerrar la hoja deslizándola hacia abajo
+function sheetDrag(sheet){ let y0=null, dy=0, t0=0, dragging=false;
+  sheet.addEventListener("touchstart", e=>{ if(e.touches.length!==1 || sheet.scrollTop>2) { y0=null; return; } if(e.target.closest("input,select,textarea,.catgrid,.acctpick,.typegrid")) { y0=null; return; } y0=e.touches[0].clientY; dy=0; t0=Date.now(); dragging=false; }, {passive:true});
+  sheet.addEventListener("touchmove", e=>{ if(y0==null) return; dy=e.touches[0].clientY-y0;
+    if(!dragging){ if(dy<8) { if(dy<-4) y0=null; return; } dragging=true; sheet.classList.add("dragging"); if(document.activeElement && sheet.contains(document.activeElement)) document.activeElement.blur(); }
+    e.preventDefault(); const d=Math.max(0,dy); sheet.style.transform=`translateY(${d}px)`; const sc=sheet.parentElement; if(sc) sc.style.backgroundColor=`rgba(8,18,15,${Math.max(0,.5-d/900)})`; }, {passive:false});
+  const end = () => { if(!dragging){ y0=null; return; } const v=dy/Math.max(1,Date.now()-t0); sheet.classList.remove("dragging"); const sc=sheet.parentElement;
+    if(dy>130 || v>0.7){ haptic(); closeSheet(); }
+    else { sheet.style.transition="transform .35s cubic-bezier(.2,.8,.2,1)"; sheet.style.transform=""; if(sc) sc.style.backgroundColor=""; setTimeout(()=>{ sheet.style.transition=""; }, 360); }
+    y0=null; dragging=false; };
+  sheet.addEventListener("touchend", end); sheet.addEventListener("touchcancel", end); }
 const opt = (v,l,sel) => `<option value="${esc(v)}"${String(v)===String(sel)?" selected":""}>${esc(l)}</option>`;
 const sheetHead = title => `<div class="sechead"><h2 style="font-size:1.25rem">${esc(title)}</h2><button class="circle-btn flat" type="button" data-close aria-label="Cerrar">${icon("x")}</button></div>`;
 
@@ -1495,15 +1603,15 @@ function sharedForm(){
 function limitForm(){ simpleForm("Límite de la tarjeta", [{id:"usd", label:"Límite en $ (indexado a tasa BCV)", num:true, value:cfg.tdc.limitUSD}], v=>{ if(!(v.usd>0)) return "Escribe el límite."; cfg.tdc.limitUSD=v.usd; guard(saveCfg(),"Límite actualizado"); }); }
 
 // ---------- events ----------
-const setTab = t => { tab=t; try{ if(t!=="inv") localStorage.setItem("fin.tab",t); }catch(_){}; render(); window.scrollTo({top:0}); };
+const setTab = t => { if(t!==tab){ const a=TAB_ORDER.indexOf(tab), b=TAB_ORDER.indexOf(t); viewAnim = t==="inv"||tab==="inv" ? "view-in" : b>a ? "view-in-r" : "view-in-l"; } tab=t; try{ if(t!=="inv") localStorage.setItem("fin.tab",t); }catch(_){}; render(); window.scrollTo({top:0}); };
 document.addEventListener("click", e=>{
   const tabBtn = e.target.closest("#tabs button[data-tab]"); if(tabBtn){ setTab(tabBtn.dataset.tab); return; }
   const go = e.target.closest("[data-go]"); if(go){ if(go.dataset.seg){ pagosSeg=go.dataset.seg; } setTab(go.dataset.go); return; }
   const ps = e.target.closest("[data-pseg]"); if(ps){ pagosSeg=ps.dataset.pseg; try{localStorage.setItem("fin.pseg",pagosSeg)}catch(_){}; render(); return; }
   const b = e.target.closest("[data-act]"); if(!b || !cfgReady) return;
   const act=b.dataset.act, id=b.dataset.id;
-  if(act==="prevm"){ selYm=shiftYm(selYm,-1); render(); }
-  else if(act==="nextm"){ selYm=shiftYm(selYm,1); render(); }
+  if(act==="prevm"){ selYm=shiftYm(selYm,-1); viewAnim="view-in-l"; render(); }
+  else if(act==="nextm"){ selYm=shiftYm(selYm,1); viewAnim="view-in-r"; render(); }
   else if(act==="new") txForm(tab==="tdc"?{type:"pago_tdc"}:tab==="inv"?{type:"inversion"}:null);
   else if(act==="rate") rateForm();
   else if(act==="calc") calcForm();
@@ -1539,6 +1647,63 @@ document.addEventListener("click", e=>{
 document.addEventListener("input", e=>{ if(e.target.id==="movSearch"){ movSearch=e.target.value; render(); } });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && $("#scrim")) closeSheet(); });
 
+
+// ---------- sensación de app nativa ----------
+// Vibración leve: Android usa vibrate; en iPhone (iOS 18+) se aprovecha el interruptor nativo, que vibra al cambiar.
+const haptic = (()=>{ let lab=null; return ()=>{ try{
+  if(navigator.vibrate){ navigator.vibrate(8); return; }
+  if(!lab){ lab=document.createElement("label"); lab.className="hapt"; lab.setAttribute("aria-hidden","true"); lab.style.cssText="position:fixed;left:-200px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden";
+    const i=document.createElement("input"); i.type="checkbox"; i.setAttribute("switch",""); i.tabIndex=-1; lab.appendChild(i); document.body.appendChild(lab); }
+  lab.click(); }catch(e){} }; })();
+let suppressClickUntil=0, openSwipe=null;
+function setSwipe(el, open){ const row=el.querySelector(".row"); row.style.transition=""; row.style.transform = open ? "translateX(-96px)" : "";
+  if(open){ openSwipe=el; el.classList.add("reveal"); }
+  else { if(openSwipe===el) openSwipe=null; const b=el.querySelector("[data-act=swdel]"); if(b){ b.dataset.armed=""; const sp=b.querySelector("span"); if(sp) sp.textContent="Borrar"; } setTimeout(()=>{ if(openSwipe!==el) el.classList.remove("reveal"); }, 220); } }
+document.addEventListener("click", e=>{
+  if(e.target.closest && e.target.closest(".hapt")) return;
+  if(Date.now()<suppressClickUntil){ e.stopPropagation(); e.preventDefault(); return; }
+  const del=e.target.closest("[data-act=swdel]");
+  if(del){ e.stopPropagation(); const el=del.closest(".swipe"); const sp=del.querySelector("span");
+    if(del.dataset.armed!=="1"){ del.dataset.armed="1"; if(sp) sp.textContent="¿Seguro?"; haptic(); return; }
+    const ym=el.dataset.sym, t=(months[ym]||[]).find(x=>x.id===el.dataset.sid); haptic(); openSwipe=null; if(t) deleteTx(t, ym); return; }
+  if(openSwipe){ const inOpen = e.target.closest(".swipe")===openSwipe; setSwipe(openSwipe,false); if(inOpen){ e.stopPropagation(); e.preventDefault(); return; } }
+  if(e.target.closest("#tabs button, .fab, .btn.primary, .typegrid button, .seg2 button, .chips button")) haptic();
+}, true);
+// Gestos: deslizar un movimiento a la izquierda, y jalar hacia abajo para actualizar
+const ptrEl = (()=>{ const d=document.createElement("div"); d.className="ptr"; d.setAttribute("aria-hidden","true"); d.innerHTML='<i data-lucide="refresh-cw"></i>'; document.body.appendChild(d); return d; })();
+let sw=null, ptr=null, refreshing=false;
+const ptrShow = (d, final) => { ptrEl.style.transition = final ? "transform .3s cubic-bezier(.2,.8,.2,1), opacity .3s" : "none"; ptrEl.style.opacity = d>4 ? Math.min(1,d/60) : 0; ptrEl.style.transform = `translateY(${Math.min(d,80)-60}px) rotate(${d*3}deg)`; };
+document.addEventListener("touchstart", e=>{
+  if(e.touches.length!==1 || $("#scrim")) { sw=ptr=null; return; } const t=e.touches[0];
+  const el=e.target.closest(".swipe");
+  if(openSwipe && openSwipe!==el) setSwipe(openSwipe,false);
+  sw = el && !e.target.closest(".swipe-acts") ? {el, row:el.querySelector(".row"), x0:t.clientX, y0:t.clientY, x:0, base: el===openSwipe ? -96 : 0, mode:null} : null;
+  ptr = window.scrollY<=0 && !refreshing ? {x0:t.clientX, y0:t.clientY, d:0, mode:null} : null;
+}, {passive:true});
+document.addEventListener("touchmove", e=>{ const t=e.touches[0]; if(!t) return;
+  if(sw){ const dx=t.clientX-sw.x0, dy=t.clientY-sw.y0;
+    if(!sw.mode){ if(Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)*1.2) sw.mode="h"; else if(Math.abs(dy)>8) sw.mode="v"; }
+    if(sw.mode==="h"){ e.preventDefault(); ptr=null; let x=Math.min(0, sw.base+dx); if(x<-96) x=-96+(x+96)*0.3;
+      sw.el.classList.add("reveal"); sw.row.style.transition="none"; sw.row.style.transform=`translateX(${x}px)`; sw.x=x; return; }
+    if(sw.mode==="v") sw=null; }
+  if(ptr){ const dx=t.clientX-ptr.x0, dy=t.clientY-ptr.y0;
+    if(!ptr.mode){ if(dy>8 && dy>Math.abs(dx)) ptr.mode="pull"; else if(Math.abs(dx)>8 || dy<-8){ ptr=null; return; } else return; }
+    if(window.scrollY>0){ ptr=null; ptrShow(0,true); return; }
+    e.preventDefault(); ptr.d=dy*0.55; ptrShow(ptr.d,false); }
+}, {passive:false});
+const touchEnd = () => {
+  if(sw){ if(sw.mode==="h"){ suppressClickUntil=Date.now()+350; const open = sw.x < -48; if(open && sw.el!==openSwipe) haptic(); setSwipe(sw.el, open); } sw=null; }
+  if(ptr){ if(ptr.mode==="pull"){ if(ptr.d>70 && window.__finRefresh){ refreshing=true; haptic(); ptrEl.classList.add("spin"); ptrShow(70,true);
+        window.__finRefresh().then(()=>toast("Actualizado")).catch(()=>toast("Sin conexión · tus datos siguen guardados en el teléfono"))
+          .finally(()=>{ refreshing=false; ptrEl.classList.remove("spin"); ptrShow(0,true); }); }
+      else ptrShow(0,true); } ptr=null; } };
+document.addEventListener("touchend", touchEnd); document.addEventListener("touchcancel", touchEnd);
+// Encabezado que se achica al hacer scroll
+const hdr=document.querySelector("header.top");
+const onScroll=()=>{ if(hdr) hdr.classList.toggle("scrolled", window.scrollY>24); };
+window.addEventListener("scroll", onScroll, {passive:true}); onScroll();
+window.addEventListener("fin:offline", ()=>toast("Sin conexión · mostrando lo último guardado"));
+
 // ---------- boot ----------
 paintIcons();
 (async function boot(){
@@ -1557,6 +1722,10 @@ paintIcons();
 })();
 </script>
 
-<script>if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }</script>
+<script>if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{});
+  // Si salió una versión nueva de la app, se aplica sola cuando no estás llenando un formulario.
+  navigator.serviceWorker.addEventListener("message", e=>{ if(!e.data || e.data.type!=="updated") return;
+    const go=()=>{ if(document.getElementById("scrim")) return void setTimeout(go, 2000); location.reload(); };
+    if(document.hidden) go(); else document.addEventListener("visibilitychange", ()=>{ if(document.hidden) go(); }, {once:true}); }); }</script>
 </body>
 </html>
