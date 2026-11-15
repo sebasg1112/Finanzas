@@ -1053,6 +1053,7 @@ function viewInv(){
   </section>
   <div class="hint plain">${icon("lock")}<span>Este dinero no aparece en Inicio ni en tu disponible. Para meter plata aquí usa <b>+ → Invertir</b>.</span></div>
   <section>${rows}</section>
+  ${bioCan()?`<section><button class="btn ghost" type="button" data-act="bio" style="width:100%">${icon(bioGet()?"lock-open":"scan-face")} ${bioGet()?"Quitar Face ID de Inversiones":"Proteger Inversiones con Face ID"}</button></section>`:""}
   ${(()=>{ const ap=allTx().filter(t=>t.type==="inversion").sort((a,b)=>b.date.localeCompare(a.date)||(b.created||0)-(a.created||0)).slice(0,8); if(!ap.length) return "";
     return `<section><div class="sechead"><h2>Últimos aportes</h2></div><div class="card">${ap.map(txRow).join("")}</div></section>`; })()}`;
 }
@@ -1557,7 +1558,8 @@ function sharedForm(){
       body = `<div class="grid2"><div class="field"><span class="flabel">Entre cuántos (contigo)</span><div class="stepper"><button type="button" data-shstep="-1" aria-label="Menos">${icon("minus")}</button><b>${sh.n}</b><button type="button" data-shstep="1" aria-label="Más">${icon("plus")}</button></div></div>
         <div class="field"><span class="flabel">Cómo se divide</span>${seg("mode",[["iguales","Igual"],["distinto","Distinto"]])}</div></div>
         <div class="field"><span class="flabel">¿Quiénes te deben?</span><div class="card list" style="box-shadow:none;background:var(--bg)">${sh.people.map((p,k)=>`<div class="row" style="padding:8px 10px"><input class="plain" data-pname="${k}" value="${esc(p.name)}" placeholder="Nombre ${k+1}" aria-label="Nombre ${k+1}"><input class="plain amtin" data-pamt="${k}" inputmode="decimal" value="${esc(p.amt)}" ${sh.mode==="iguales"?"readonly":""} aria-label="Monto de ${esc(p.name||`persona ${k+1}`)}"></div>`).join("")}</div></div>
-        <div class="field"><span class="flabel">Pagaste con</span><div class="acctpick" data-shacct>${accs.map(a=>`<button type="button" data-v="${a.id}" aria-pressed="${a.id===sh.acct}">${ico(ACC_ICON[a.id]||"wallet",accColor(a.id))}${esc(a.credit?"Tarjeta crédito":a.name)}</button>`).join("")}</div></div>`;
+        <div class="field"><span class="flabel">Pagaste con</span><div class="acctpick" data-shacct>${accs.map(a=>`<button type="button" data-v="${a.id}" aria-pressed="${a.id===sh.acct}">${ico(ACC_ICON[a.id]||"wallet",accColor(a.id))}${esc(a.credit?"Tarjeta crédito":a.name)}</button>`).join("")}</div></div>
+        <label class="field" id="shPmBox" hidden style="display:flex;gap:10px;align-items:center;flex-direction:row;cursor:pointer"><input type="checkbox" id="shPm" ${sh.pm?"checked":""} style="width:22px;height:22px;flex:0 0 22px"><span><b>Pagué por pago móvil o transferencia</b><br><span class="small muted" id="shPmHint">Anota sola la comisión del banco</span></span></label>`;
     } else {
       body = `<div class="field"><label for="shOther">¿Quién pagó?</label><input id="shOther" value="${esc(sh.other)}" placeholder="Ej. Pedro"></div>
         <div class="grid2"><div class="field"><span class="flabel">Entre cuántos (contigo)</span><div class="stepper"><button type="button" data-shstep="-1" aria-label="Menos">${icon("minus")}</button><b>${sh.n}</b><button type="button" data-shstep="1" aria-label="Más">${icon("plus")}</button></div></div>
@@ -1576,7 +1578,7 @@ function sharedForm(){
   };
   const mount = sheet => {
     const g = id => sheet.querySelector("#"+id);
-    const capture = () => { ["Total","Desc","Date","Other","Mine","Due"].forEach(k=>{ const el=g("sh"+k); if(el) sh[k==="Total"?"total":k==="Desc"?"desc":k==="Date"?"date":k==="Other"?"other":k==="Mine"?"mine":"due"]=el.value; }); if(g("shCat")) sh.cat=g("shCat").value;
+    const capture = () => { ["Total","Desc","Date","Other","Mine","Due"].forEach(k=>{ const el=g("sh"+k); if(el) sh[k==="Total"?"total":k==="Desc"?"desc":k==="Date"?"date":k==="Other"?"other":k==="Mine"?"mine":"due"]=el.value; }); if(g("shCat")) sh.cat=g("shCat").value; if(g("shPm")) sh.pm=g("shPm").checked;
       sheet.querySelectorAll("[data-pname]").forEach(i=>sh.people[+i.dataset.pname].name=i.value); sheet.querySelectorAll("[data-pamt]").forEach(i=>sh.people[+i.dataset.pamt].amt=i.value); };
     const redraw = () => { capture(); const ns=sheet.cloneNode(false); sheet.replaceWith(ns); ns.innerHTML=draw(); mount(ns); paintIcons(); };
     const sym = sh.cur==="Bs"?"Bs":"$"; const m = v => sh.cur==="Bs" ? `${fmt(v)} Bs` : usd(v);
@@ -1586,7 +1588,9 @@ function sharedForm(){
         const others = sh.people.reduce((s,p)=>s+(parseAmt(p.amt)||0),0); const mine = tot-others;
         return {tot, others, mine};
       } else { const mine = sh.mine.trim()? parseAmt(sh.mine) : per; return {tot, mine}; } };
+    const shFee = c => { const a=sh.acct&&acct(sh.acct); if(!(sh.payer==="yo" && sh.pm && a && a.cur==="Bs" && !a.credit && c.tot>0)) return 0; return pmFee(conv(c.tot, sh.cur, "Bs", sh.date||todayStr())); };
     const update = () => { const c = calc(); const pv=g("shPrev");
+      if(g("shPmBox")){ const a=sh.acct&&acct(sh.acct); const can=!!(a && a.cur==="Bs" && !a.credit); g("shPmBox").hidden=!can; g("shPmBox").style.display=can?"flex":"none"; const f=shFee(c); g("shPmHint").textContent = f>0 ? `Comisión del banco: ${fmt(f)} Bs (va por tu cuenta)` : "Anota sola la comisión del banco"; }
       if(isNaN(c.tot)){ pv.hidden=true; return; }
       pv.hidden=false; pv.innerHTML = sh.payer==="yo" ? `Tu gasto: <b>${m(c.mine)}</b> · Te deben: <b>${m(c.others)}</b>${c.mine<0?' <span class="neg">— los montos suman más que el total</span>':""}<br>${sh.acct&&acct(sh.acct)?`Sale de <b>${esc(acct(sh.acct).name)}</b>: ${m(c.tot)}`:'<span class="neg">Elige con qué pagaste</span>'}` : `Le debes <b>${isNaN(c.mine)?"—":m(c.mine)}</b> a ${esc(sh.other||"esa persona")}. Se registra como gasto cuando le pagues.`; };
     sheet.querySelector("[data-close]").addEventListener("click", closeSheet);
@@ -1606,6 +1610,8 @@ function sharedForm(){
         const toAcct = v => +conv(v, sh.cur, a.cur, date).toFixed(2);
         if(c.mine>0){ const amt=toAcct(c.mine); ps.push(addTx({id:uid(), type:"gasto", date, acct:a.id, amt, cat:sh.cat, desc:`${desc} (tu parte)`, usd: conv(c.mine, sh.cur, "USD", date), rate: a.cur==="Bs"?r:undefined, created:Date.now()})); }
         if(c.others>0){ const amt=toAcct(c.others); const names=sh.people.map(p=>p.name.trim()).join(", "); ps.push(addTx({id:uid(), type:"adelanto", date, acct:a.id, amt, usd: conv(c.others, sh.cur, "USD", date), desc:`${desc}: pagaste por ${names}`, cat:"Adelanto", created:Date.now()+1})); }
+        const fee = shFee(c);
+        if(fee>0){ if(!cfg.cats.gasto.includes(PM_CAT)) cfg.cats.gasto.push(PM_CAT); ps.push(addTx({id:uid(), type:"gasto", date, acct:a.id, amt:fee, rate:r, usd:fee/r, cat:PM_CAT, desc:`Comisión pago móvil · ${desc}`, created:Date.now()+2})); }
         cfg.deudas=[...(cfg.deudas||[]), ...sh.people.filter(p=>parseAmt(p.amt)>0).map((p,k)=>({id:"d"+Date.now().toString(36)+k, dir:"meDeben", person:p.name.trim(), desc, cur:sh.cur, amt:parseAmt(p.amt), paid:0, date, due:null, cat:sh.cat}))];
       } else {
         if(!sh.other.trim()) return err("Escribe quién pagó."); if(!(c.mine>0)) return err("Revisa tu parte.");
@@ -1631,6 +1637,7 @@ document.addEventListener("click", e=>{
   else if(act==="nextm"){ selYm=shiftYm(selYm,1); viewAnim="view-in-r"; render(); }
   else if(act==="new") txForm(tab==="tdc"?{type:"pago_tdc"}:tab==="inv"?{type:"inversion"}:null);
   else if(act==="rate") rateForm();
+  else if(act==="bio") bioToggle();
   else if(act==="calc") calcForm();
   else if(act==="newplan") planForm(null);
   else if(act==="editplan") planForm((cfg.cuotas||[]).find(x=>x.id===id));
@@ -1641,7 +1648,7 @@ document.addEventListener("click", e=>{
   else if(act==="cobrar") cobrarForm((cfg.deudas||[]).find(x=>x.id===id));
   else if(act==="pagardeuda") payDebt((cfg.deudas||[]).find(x=>x.id===id));
   else if(act==="asklive"){ e.stopPropagation(); askLive(); }
-  else if(act==="vault") setTab(tab==="inv"?"inicio":"inv");
+  else if(act==="vault"){ if(tab==="inv") setTab("inicio"); else vaultOpen(); }
   else if(act==="toggleinv"){ hideInv=!hideInv; render(); }
   else if(act==="filter"){ movFilter=b.dataset.f; render(); }
   else if(act==="edit"){ const t=(months[b.dataset.ym]||[]).find(x=>x.id===id); if(t && (t.type==="adelanto"||t.type==="cobro")){ specialTxForm(t, b.dataset.ym); } else if(t){ const c=JSON.parse(JSON.stringify(t)); c._ym=b.dataset.ym; c._origToAmt=t.toAmt; txForm(c); } }
@@ -1720,6 +1727,27 @@ const hdr=document.querySelector("header.top");
 const onScroll=()=>{ if(hdr) hdr.classList.toggle("scrolled", window.scrollY>24); };
 window.addEventListener("scroll", onScroll, {passive:true}); onScroll();
 window.addEventListener("fin:offline", ()=>toast("Sin conexión · mostrando lo último guardado"));
+
+// ---------- Face ID / huella para Inversiones ----------
+// Usa la llave del propio teléfono (WebAuthn). La llave nunca sale del dispositivo; aquí solo se guarda su identificador.
+const BIO_KEY="fin.bio"; let bioUntil=0;
+const bioGet = () => { try{ return JSON.parse(localStorage.getItem(BIO_KEY)||"null"); }catch(e){ return null; } };
+const bioCan = () => !!(window.PublicKeyCredential && navigator.credentials && window.isSecureContext);
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf))); const unb64 = str => Uint8Array.from(atob(str), ch=>ch.charCodeAt(0));
+async function bioCreate(){ const cred = await navigator.credentials.create({publicKey:{ challenge: crypto.getRandomValues(new Uint8Array(32)), rp:{name:"Mis finanzas"},
+    user:{id: crypto.getRandomValues(new Uint8Array(16)), name:"mis-finanzas", displayName:"Mis finanzas"}, pubKeyCredParams:[{type:"public-key",alg:-7},{type:"public-key",alg:-257}],
+    authenticatorSelection:{authenticatorAttachment:"platform", userVerification:"required"}, timeout:60000 }});
+  localStorage.setItem(BIO_KEY, JSON.stringify({id:b64(cred.rawId)})); }
+async function bioCheck(){ const st=bioGet(); await navigator.credentials.get({publicKey:{ challenge: crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[{type:"public-key", id:unb64(st.id), transports:["internal"]}], userVerification:"required", timeout:60000 }}); }
+async function vaultOpen(){
+  const st=bioGet();
+  if(!st || !bioCan() || Date.now()<bioUntil){ setTab("inv"); if(!st && bioCan() && !localStorage.getItem("fin.bio.asked")){ localStorage.setItem("fin.bio.asked","1"); setTimeout(bioOffer, 500); } return; }
+  try{ await bioCheck(); bioUntil=Date.now()+5*60000; haptic(); setTab("inv"); }
+  catch(e){ toast("No se pudo verificar. Inténtalo otra vez."); } }
+function bioOffer(){ simpleForm("Proteger Inversiones", [{html:`<div class="hint plain">${icon("scan-face")}<span>¿Quieres que Inversiones pida <b>Face ID</b> (o tu huella o clave del teléfono) para abrirse? Vale solo para este dispositivo y lo puedes quitar cuando quieras. Toca <b>Guardar</b> para activarlo.</span></div>`}],
+  async ()=>{ try{ await bioCreate(); bioUntil=Date.now()+5*60000; toast("Listo: Inversiones ahora pide Face ID"); render(); }catch(e){ toast("No se activó. Puedes intentarlo luego desde Inversiones."); } }); }
+async function bioToggle(){ if(bioGet()){ try{ await bioCheck(); localStorage.removeItem(BIO_KEY); toast("Face ID desactivado"); render(); }catch(e){ toast("No se pudo verificar."); } } else bioOffer(); }
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden && bioGet()){ bioUntil=0; if(tab==="inv") setTab("inicio"); } });
 
 // ---------- boot ----------
 paintIcons();
