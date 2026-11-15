@@ -536,7 +536,7 @@ const CAT = {
   "Estacionamiento":["square-parking",3],"Mantenimiento carro":["wrench",3],"Salud y farmacia":["pill",6],"Ocio":["ticket",5],
   "Deporte y fútbol":["trophy",8],"Suscripciones":["repeat",7],"Regalos":["gift",6],"Personal":["shirt",5],"Hogar":["sofa",4],
   "Viajes":["plane",7],"Préstamos":["hand-coins",4],"Otros":["ellipsis",0],"Magnum City Club":["dumbbell",8],"Condominio":["building-2",3],
-  "NetUno":["wifi",7],"Movistar":["smartphone",7],"Seguro Mercantil":["shield-check",1],"Intereses y comisiones TDC":["percent",0],"Ajuste del banco":["scale",0],
+  "NetUno":["wifi",7],"Movistar":["smartphone",7],"Seguro Mercantil":["shield-check",1],"Intereses y comisiones TDC":["percent",0],"Ajuste del banco":["scale",0],"Comisiones bancarias":["landmark",0],
   "Sueldo":["briefcase",1],"Bono":["sparkles",4],"Reembolso":["undo-2",7],"Préstamo devuelto":["hand-coins",1],"Otros ingresos":["circle-plus",1],
 };
 const catIcon = c => (CAT[c]||["circle",0])[0];
@@ -726,7 +726,7 @@ function invValue(i){
 
 // ---------- rendering ----------
 function txRow(t){ return `<div class="swipe" data-sid="${esc(t.id)}" data-sym="${ymOf(t.date)}"><div class="swipe-acts" aria-hidden="true"><button type="button" data-act="swdel" tabindex="-1" aria-label="Borrar">${icon("trash-2")}<span>Borrar</span></button></div>${txRowInner(t)}</div>`; }
-function deleteTx(t, ym){ months[ym]=(months[ym]||[]).filter(x=>x.id!==t.id); if(t.interestId) dropTx(t.interestId);
+function deleteTx(t, ym){ months[ym]=(months[ym]||[]).filter(x=>x.id!==t.id); if(t.interestId) dropTx(t.interestId); if(t.feeId) dropTx(t.feeId);
   const ps=[saveMonth(ym)]; for(const y of dropped.splice(0)) if(y!==ym) ps.push(saveMonth(y)); if(unlinkTx(t)) ps.push(saveCfg()); render(); return guard(Promise.all(ps),"Eliminado"); }
 function txRowInner(t){
   const a = acct(t.acct); const [ic, col] = txIcon(t);
@@ -888,6 +888,10 @@ function unlinkTx(t){ let dirty=unlinkAlloc(t);
   if(t.debtId && t.debtPaid){ const d=(cfg.deudas||[]).find(x=>x.id===t.debtId); if(d){ d.paid=Math.max(0,(d.paid||0)-t.debtPaid); dirty=true; } }
   return dirty; }
 const dropped = [];
+// Comisión por pago móvil / transferencia a otros bancos: 0,3 % con mínimo (se puede cambiar en la hoja: config.pm)
+const PM_CAT = "Comisiones bancarias";
+const pmCfg = () => Object.assign({pct:0.003, min:16}, (cfg && cfg.pm) || {});
+const pmFee = base => { const c=pmCfg(); return Math.max(c.min, Math.round(base*c.pct*100)/100); };
 // Al marcar "la tarjeta quedó en cero": la diferencia entre lo pagado y lo que la app calculaba se anota como "Ajuste del banco".
 function settleAdjust(rec, exclude){ let catDirty=false;
   const before = creditUsd({until:rec.date, exclude}).tdc || 0; const extra = rec.toAmt/rec.rate - before;
@@ -1112,7 +1116,7 @@ const sheetHead = title => `<div class="sechead"><h2 style="font-size:1.25rem">$
 
 function txForm(init){
   const t = Object.assign({type:"gasto", date:todayStr(), acct:"binance", cat:"Mercado", desc:"", amt:"", to:"mercantil", toAmt:"", inv:"cripto"}, init||{});
-  const editing = !!t.id; let type = t.type;
+  const editing = !!t.id; let type = t.type; let pmTouched = !!(t.id && t.pm && Math.abs((+t.pmFee||0) - pmFee(+(t.type==="pago_tdc"?t.toAmt:t.amt)||0)) > 0.005);
   if(t.alloc){ t.alloc0 = t.alloc; t.costAdded0 = t.costAdded; }
   const accPicker = (key, sel, list) => `<div class="acctpick" data-pick="${key}">${list.map(a=>`<button type="button" data-v="${a.id}" aria-pressed="${a.id===sel}">${ico(ACC_ICON[a.id]||"wallet",accColor(a.id))}${esc(a.credit?"Tarjeta crédito":a.name)}</button>`).join("")}</div>`;
   const amtBox = (id, val, lbl) => `<div class="field"><span class="flabel">${lbl}</span><label class="amtbox"><input id="${id}" inputmode="decimal" value="${esc(typeof val==="number"?inStr(val):(val??""))}" placeholder="0,00" aria-label="${esc(lbl)}"><span id="${id}Cur"></span></label></div>`;
@@ -1154,6 +1158,8 @@ function txForm(init){
     return `${sheetHead(editing?"Editar movimiento":"Registrar")}
       <div class="typegrid">${types}</div>
       ${body}
+      ${["gasto","cambio","pago_tdc"].includes(type)?`<div id="pmBox" hidden><label class="field" style="display:flex;gap:10px;align-items:center;flex-direction:row;cursor:pointer"><input type="checkbox" id="fPm" ${t.pm?"checked":""} style="width:22px;height:22px;flex:0 0 22px"><span><b>Fue pago móvil o transferencia</b><br><span class="small muted">Anota sola la comisión del banco (0,3 %, mínimo ${fmt(pmCfg().min)} Bs)</span></span></label>
+        <div class="field" id="pmFeeBox" hidden><label for="fPmFee">Comisión (Bs)</label><input id="fPmFee" inputmode="decimal" value="${t.pmFee!=null&&t.pmFee!==""?esc(typeof t.pmFee==="number"?inStr(t.pmFee):t.pmFee):""}" placeholder="0,00"></div></div>`:""}
       <div class="grid2"><div class="field"><label for="fDesc">Descripción</label><input id="fDesc" value="${esc(t.desc)}" placeholder="${type==="gasto"?"Ej. Burger King":"Opcional"}"></div><div class="field"><label for="fDate">Fecha</label><input id="fDate" type="date" value="${t.date}"></div></div>
       <div class="hint" id="preview" hidden></div>
       <div class="err" id="fErr" hidden></div>
@@ -1161,7 +1167,7 @@ function txForm(init){
   };
   const mount = sheet => {
     const g = id => sheet.querySelector("#"+id); const val = id => g(id) ? g(id).value : null;
-    const capture = () => { if(g("fDate")) t.date=g("fDate").value; if(g("fDesc")) t.desc=g("fDesc").value; if(g("fInv")) t.inv=g("fInv").value; if(g("fAmt")) t.amt=g("fAmt").value; if(g("fToAmt")) t.toAmt=g("fToAmt").value; if(g("fRate")) t.rate=parseAmt(g("fRate").value)||undefined; if(g("fU0")) t.alloc = readAlloc(); };
+    const capture = () => { if(g("fDate")) t.date=g("fDate").value; if(g("fDesc")) t.desc=g("fDesc").value; if(g("fInv")) t.inv=g("fInv").value; if(g("fAmt")) t.amt=g("fAmt").value; if(g("fToAmt")) t.toAmt=g("fToAmt").value; if(g("fRate")) t.rate=parseAmt(g("fRate").value)||undefined; if(g("fU0")) t.alloc = readAlloc(); if(g("fPm")){ t.pm=g("fPm").checked; t.pmFee=g("fPmFee").value; } };
     const readAlloc = () => { const inv=cfg.investments.find(i=>i.id===t.inv); if(!inv||inv.kind!=="cripto") return null; return (inv.holdings||[]).map((h,k)=>({sym:h.sym, usdt:parseAmt(val(`fU${k}`)), qty:parseAmt(val(`fQ${k}`))})).filter(x=>!isNaN(x.usdt)||!isNaN(x.qty)).map(x=>({sym:x.sym, usdt:isNaN(x.usdt)?null:x.usdt, qty:isNaN(x.qty)?null:x.qty})); };
     const redraw = () => { capture(); const ns=sheet.cloneNode(false); sheet.replaceWith(ns); ns.innerHTML=draw(); mount(ns); paintIcons(); };
     const update = () => {
@@ -1169,6 +1175,8 @@ function txForm(init){
       if(g("fAmtCur")) g("fAmtCur").textContent = curSym(a.cur);
       if(g("fToAmtCur")) g("fToAmtCur").textContent = type==="pago_tdc" ? "Bs" : curSym(acct(t.to).cur);
       const amt = parseAmt(val("fAmt")); let pv = "";
+      if(g("pmBox")){ const can = a.cur==="Bs" && !a.credit; g("pmBox").hidden = !can; const on = can && g("fPm").checked; g("pmFeeBox").hidden = !on;
+        if(on && !pmTouched){ const base = type==="pago_tdc" ? parseAmt(val("fToAmt")) : amt; g("fPmFee").value = base>0 ? inStr(pmFee(base)) : ""; } }
       if(type==="gasto"||type==="ingreso"){
         g("rateBox").hidden = a.cur!=="Bs";
         if(a.cur==="Bs" && !val("fRate")) g("fRate").value = inStr(r0);
@@ -1199,6 +1207,7 @@ function txForm(init){
     sheet.querySelector("[data-close]").addEventListener("click", closeSheet);
     sheet.addEventListener("input", e=>{ if(e.target.id==="fDate" && g("fRate")) g("fRate").value = inStr(rateOn(g("fDate").value)); if(e.target.matches("[id^=fU]")){ const s=(readAlloc()||[]).reduce((a,x)=>a+(x.usdt||0),0); if(s>0) g("fAmt").value=inStr(+s.toFixed(2)); } update(); });
     if(g("fInv")) g("fInv").addEventListener("change", ()=>{ t.inv=g("fInv").value; t.alloc=null; redraw(); });
+    if(g("fPm")){ g("fPm").addEventListener("change", update); g("fPmFee").addEventListener("input", ()=>{ pmTouched = g("fPmFee").value.trim()!==""; }); }
     g("fSave").addEventListener("click", async ()=>{
       const err = m => { g("fErr").textContent=m; g("fErr").hidden=false; };
       const date = val("fDate"); if(!/^\d{4}-\d{2}-\d{2}$/.test(date||"")) return err("Elige una fecha.");
@@ -1237,6 +1246,14 @@ function txForm(init){
       if(t.hist) rec.hist = true;
       if(t.cuotaRef) rec.cuotaRef = t.cuotaRef;
       let cfgDirty = (typeof invDirty!=="undefined" && invDirty) || (typeof catDirty!=="undefined" && catDirty);
+      if(t.feeId) dropTx(t.feeId);
+      if(g("fPm") && g("fPm").checked && a.cur==="Bs" && !a.credit){
+        let fee = parseAmt(val("fPmFee")); if(!(fee>0)) fee = pmFee(rec.amt);
+        const r = rec.rate || rateOn(date);
+        const ft = {id:uid(), type:"gasto", date, acct:a.id, cat:PM_CAT, desc:`Comisión pago móvil${rec.desc?" · "+rec.desc:""}`, amt:fee, rate:r, usd:fee/r, created:rec.created+1, linkFee:rec.id};
+        if(!cfg.cats.gasto.includes(PM_CAT)){ cfg.cats.gasto.push(PM_CAT); cfgDirty = true; }
+        const fym=ymOf(date); months[fym]=[...(months[fym]||[]), ft]; if(!dropped.includes(fym)) dropped.push(fym);
+        rec.pm = true; rec.pmFee = fee; rec.feeId = ft.id; }
       if(t.debtId){ const d=(cfg.deudas||[]).find(x=>x.id===t.debtId); rec.debtId=t.debtId; if(d){ let credit = conv(rec.amt, a.cur, d.cur, date); const left = debtLeft(d) + (t.debtPaid||0); if(Math.abs(credit-left) <= left*0.02) credit = left; rec.debtPaid = credit; d.paid = Math.max(0, (d.paid||0) - (t.debtPaid||0) + credit); cfgDirty = true; } }
       if(!t.id && t.cuotaRef){ const pl=(cfg.cuotas||[]).find(x=>x.id===t.cuotaRef.plan); const c=pl&&pl.schedule[t.cuotaRef.idx]; if(c){ c.paid=true; c.paidDate=date; c.txId=rec.id; cfgDirty=true; } }
       const oldYm = t.id ? t._ym : null; const ym = ymOf(date);
@@ -1252,7 +1269,7 @@ function txForm(init){
     });
     if(g("fDel")) g("fDel").addEventListener("click", ()=>{ const b=g("fDel");
       if(b.dataset.armed!=="1"){ b.dataset.armed="1"; b.textContent="Toca otra vez para eliminar"; return; }
-      months[t._ym] = (months[t._ym]||[]).filter(x=>x.id!==t.id); if(t.interestId) dropTx(t.interestId); const ps=[saveMonth(t._ym)]; for(const y of dropped.splice(0)) if(y!==t._ym) ps.push(saveMonth(y)); if(unlinkTx(t)) ps.push(saveCfg()); closeSheet(); render(); guard(Promise.all(ps), "Eliminado"); });
+      months[t._ym] = (months[t._ym]||[]).filter(x=>x.id!==t.id); if(t.interestId) dropTx(t.interestId); if(t.feeId) dropTx(t.feeId); const ps=[saveMonth(t._ym)]; for(const y of dropped.splice(0)) if(y!==t._ym) ps.push(saveMonth(y)); if(unlinkTx(t)) ps.push(saveCfg()); closeSheet(); render(); guard(Promise.all(ps), "Eliminado"); });
     update();
     const f = type==="pago_tdc" ? g("fToAmt") : g("fAmt"); if(f && !editing) f.focus({preventScroll:true});
   };
