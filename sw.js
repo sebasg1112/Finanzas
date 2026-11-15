@@ -1,7 +1,7 @@
 // Guarda la app en el teléfono para que abra al instante, y se actualiza sola por detrás.
 // Tus datos NO pasan por aquí: van directo a tu hoja de Google (y la copia rápida queda en el propio teléfono).
-const CACHE = "fin-shell-v2";
-const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./favicon-64.png"];
+const CACHE = "fin-shell-v3";
+const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png?v=3", "./icon-192.png?v=3", "./favicon-64.png?v=3"];
 const CDN = ["cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
 
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(()=>{})); self.skipWaiting(); });

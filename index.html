@@ -10,8 +10,8 @@
 <meta name="apple-mobile-web-app-title" content="Mis finanzas">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="favicon-64.png">
-<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="favicon-64.png?v=3">
+<link rel="apple-touch-icon" href="icon-180.png?v=3">
 <style>
 :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 body{margin:0;font-size:14px}
@@ -64,8 +64,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:color-mix(in srgb,var(--solid) 80%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
 .aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(circle at 8% 4%,var(--au1) 0,transparent 42%),radial-gradient(circle at 100% 22%,var(--au2) 0,transparent 44%),radial-gradient(circle at 0% 72%,var(--au3) 0,transparent 40%),radial-gradient(circle at 100% 92%,var(--au4) 0,transparent 42%),var(--bg)}
 .card,.chip,.circle-btn,.chips button,.search,nav.bottom{border:1px solid var(--glass-border);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
-.logo{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:linear-gradient(160deg,#FFFFFF,#DDEBF0);box-shadow:0 2px 8px rgba(40,70,90,.18);flex-shrink:0}
-.logo svg{width:20px;height:20px}
+.logo{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;overflow:hidden;background:#EAF3EC;box-shadow:0 2px 8px rgba(40,70,90,.18);flex-shrink:0}
+.logo svg{width:100%;height:100%;display:block}
 .wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 calc(var(--nav-h) + 56px + env(safe-area-inset-bottom,0px))}
 h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
 h2{font-size:1.1rem;font-weight:700}
@@ -359,7 +359,8 @@ header.top.scrolled h1{font-size:1.05rem}
   .scrim.closing{background-color:rgba(8,18,15,0)!important;pointer-events:none}
   .scrim.closing .sheet{transform:translateY(105%)!important;transition:transform .28s cubic-bezier(.4,0,1,1)!important}
 }
-.sheet.dragging{transition:none!important;animation:none!important}
+.sheet.dragging,.sheet.still{animation:none!important}
+.sheet.dragging{transition:none!important}
 /* deslizar un movimiento para borrarlo */
 .swipe{position:relative;overflow:hidden}
 .swipe .row{position:relative;z-index:1;will-change:transform}
@@ -385,7 +386,7 @@ header.top.scrolled h1{font-size:1.05rem}
 <div class="aurora" aria-hidden="true"></div>
 <div class="wrap">
   <header class="top">
-    <h1><span class="logo"><svg viewBox="0 0 120 120" aria-hidden="true"><path d="M56 12a48 48 0 0 0 0 96z" fill="#0B6B58"></path><path d="M64 12a48 48 0 0 1 0 96z" fill="#2F5BD0"></path></svg></span><span id="hdrTitle">Mis finanzas</span></h1>
+    <h1><span class="logo"><svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#EAF3EC"></rect><path d="M14 94 L52 42 L68 64 L78 52 L106 94 Z" fill="#0E6B54"></path><path d="M52 42 L41 57 L50 53 L55 59 L62 55 Z" fill="#FFFFFF"></path><path d="M52 42 V20" stroke="#17201C" stroke-width="5" stroke-linecap="round"></path><path d="M54 20 L74 26 L54 33 Z" fill="#F29A2E"></path></svg></span><span id="hdrTitle">Mis finanzas</span></h1>
     <div class="hdr-actions">
       <button class="chip" id="rateChip" data-act="rate" type="button" aria-label="Tasa BCV"><i data-lucide="landmark"></i><b id="rateVal">—</b><span class="muted small">Bs/$</span></button>
       <button class="circle-btn" data-act="calc" type="button" aria-label="Calculadora"><i data-lucide="calculator"></i></button>
@@ -425,7 +426,7 @@ header.top.scrolled h1{font-size:1.05rem}
     const c = getConn() || {};
     const el = document.createElement("div"); el.id="setup";
     el.innerHTML = `<div class="setup-card">
-      <span class="logo" style="width:64px;height:64px;border-radius:18px"><svg viewBox="0 0 120 120" aria-hidden="true" style="width:42px;height:42px"><path d="M56 12a48 48 0 0 0 0 96z" fill="#0B6B58"></path><path d="M64 12a48 48 0 0 1 0 96z" fill="#2F5BD0"></path></svg></span>
+      <span class="logo" style="width:64px;height:64px;border-radius:18px"><svg viewBox="0 0 120 120" aria-hidden="true" style="width:100%;height:100%"><rect width="120" height="120" fill="#EAF3EC"></rect><path d="M14 94 L52 42 L68 64 L78 52 L106 94 Z" fill="#0E6B54"></path><path d="M52 42 L41 57 L50 53 L55 59 L62 55 Z" fill="#FFFFFF"></path><path d="M52 42 V20" stroke="#17201C" stroke-width="5" stroke-linecap="round"></path><path d="M54 20 L74 26 L54 33 Z" fill="#F29A2E"></path></svg></span>
       <h2 style="font-size:1.4rem">Conecta tu app</h2>
       <p class="small muted" style="margin:0">Solo la primera vez en este dispositivo. Pega el link de tu Apps Script (termina en <b>/exec</b>) y tu clave.</p>
       <div class="field"><label for="cApi">Link de Apps Script</label><input id="cApi" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec"></div>
@@ -1176,9 +1177,19 @@ function openSheet(html, onMount){
 function closeSheet(){ const sc=$("#scrim"); if(!sc) return; sc.removeAttribute("id"); sc.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));
   const sh=sc.querySelector(".sheet"); if(sh){ sh.classList.remove("dragging"); }
   if(REDUCED){ sc.remove(); return; } void sc.offsetWidth; sc.classList.add("closing"); setTimeout(()=>sc.remove(), 300); }
+// Redibujar el contenido de una hoja abierta sin que vuelva a subir desde abajo ni se pierda el gesto de cerrar
+function swapSheet(sheet, html){
+  const fid = document.activeElement && sheet.contains(document.activeElement) ? document.activeElement.id : null;
+  const top = sheet.scrollTop;
+  const ns = sheet.cloneNode(false); ns.classList.add("still"); ns.classList.remove("dragging"); ns.style.transform="";
+  ns.innerHTML = `<span class="grabber" aria-hidden="true"></span>${html}`;
+  sheet.replaceWith(ns); sheetDrag(ns); ns.scrollTop = top;
+  const sc = ns.parentElement; if(sc) sc.style.backgroundColor = "";
+  if(fid){ const el = ns.querySelector("#"+CSS.escape(fid)); if(el && el.matches("input,textarea,select")) { try{ el.focus({preventScroll:true}); }catch(e){} } }
+  return ns; }
 // Cerrar la hoja deslizándola hacia abajo
 function sheetDrag(sheet){ let y0=null, dy=0, t0=0, dragging=false;
-  sheet.addEventListener("touchstart", e=>{ if(e.touches.length!==1 || sheet.scrollTop>2) { y0=null; return; } if(e.target.closest("input,select,textarea,.catgrid,.acctpick,.typegrid")) { y0=null; return; } y0=e.touches[0].clientY; dy=0; t0=Date.now(); dragging=false; }, {passive:true});
+  sheet.addEventListener("touchstart", e=>{ if(e.touches.length!==1 || sheet.scrollTop>2) { y0=null; return; } if(e.target.closest("input,select,textarea,button,a,label,.catgrid,.acctpick,.typegrid,.seg2,.stepper,.freq")) { y0=null; return; } y0=e.touches[0].clientY; dy=0; t0=Date.now(); dragging=false; }, {passive:true});
   sheet.addEventListener("touchmove", e=>{ if(y0==null) return; dy=e.touches[0].clientY-y0;
     if(!dragging){ if(dy<8) { if(dy<-4) y0=null; return; } dragging=true; sheet.classList.add("dragging"); if(document.activeElement && sheet.contains(document.activeElement)) document.activeElement.blur(); }
     e.preventDefault(); const d=Math.max(0,dy); sheet.style.transform=`translateY(${d}px)`; const sc=sheet.parentElement; if(sc) sc.style.backgroundColor=`rgba(8,18,15,${Math.max(0,.5-d/900)})`; }, {passive:false});
@@ -1251,7 +1262,7 @@ function txForm(init){
     const g = id => sheet.querySelector("#"+id); const val = id => g(id) ? g(id).value : null;
     const capture = () => { if(g("fDate")) t.date=g("fDate").value; if(g("fDesc")) t.desc=g("fDesc").value; if(g("fInv")) t.inv=g("fInv").value; if(g("fAmt")) t.amt=g("fAmt").value; if(g("fToAmt")) t.toAmt=g("fToAmt").value; if(g("fRate")) t.rate=parseAmt(g("fRate").value)||undefined; if(g("fU0")) t.alloc = readAlloc(); if(g("fPm")){ t.pm=g("fPm").checked; t.pmFee=g("fPmFee").value; } };
     const readAlloc = () => { const inv=cfg.investments.find(i=>i.id===t.inv); if(!inv||inv.kind!=="cripto") return null; return (inv.holdings||[]).map((h,k)=>({sym:h.sym, usdt:parseAmt(val(`fU${k}`)), qty:parseAmt(val(`fQ${k}`))})).filter(x=>!isNaN(x.usdt)||!isNaN(x.qty)).map(x=>({sym:x.sym, usdt:isNaN(x.usdt)?null:x.usdt, qty:isNaN(x.qty)?null:x.qty})); };
-    const redraw = (skip) => { if(skip!==true) capture(); const ns=sheet.cloneNode(false); sheet.replaceWith(ns); ns.innerHTML=draw(); mount(ns); paintIcons(); };
+    const redraw = (skip) => { if(skip!==true) capture(); const ns=swapSheet(sheet, draw()); mount(ns); paintIcons(); };
     const update = () => {
       const a = acct(t.acct); const date = val("fDate")||todayStr(); const r0 = rateOn(date);
       if(g("fAmtCur")) g("fAmtCur").textContent = curSym(a.cur);
@@ -1479,7 +1490,7 @@ function calcForm(){
   };
   const mount = sheet => {
     const g = id => sheet.querySelector("#"+id);
-    const redraw = () => { const ns=sheet.cloneNode(false); sheet.replaceWith(ns); ns.innerHTML=draw(); mount(ns); paintIcons(); };
+    const redraw = () => { const ns=swapSheet(sheet, draw()); mount(ns); paintIcons(); };
     const update = () => {
       if(cs.mode==="conv"){
         cs.amt = g("cAmt").value; const a = parseAmt(cs.amt); const bs = a*rateOf(cs.cur);
@@ -1662,7 +1673,7 @@ function sharedForm(){
     const g = id => sheet.querySelector("#"+id);
     const capture = () => { ["Total","Desc","Date","Other","Mine","Due"].forEach(k=>{ const el=g("sh"+k); if(el) sh[k==="Total"?"total":k==="Desc"?"desc":k==="Date"?"date":k==="Other"?"other":k==="Mine"?"mine":"due"]=el.value; }); if(g("shCat")) sh.cat=g("shCat").value; if(g("shPm")) sh.pm=g("shPm").checked;
       sheet.querySelectorAll("[data-pname]").forEach(i=>sh.people[+i.dataset.pname].name=i.value); sheet.querySelectorAll("[data-pamt]").forEach(i=>sh.people[+i.dataset.pamt].amt=i.value); };
-    const redraw = () => { capture(); const ns=sheet.cloneNode(false); sheet.replaceWith(ns); ns.innerHTML=draw(); mount(ns); paintIcons(); };
+    const redraw = () => { capture(); const ns=swapSheet(sheet, draw()); mount(ns); paintIcons(); };
     const sym = sh.cur==="Bs"?"Bs":"$"; const m = v => sh.cur==="Bs" ? `${fmt(v)} Bs` : usd(v);
     const calc = () => { capture(); const tot=parseAmt(sh.total); const per = tot/sh.n;
       if(sh.payer==="yo"){
